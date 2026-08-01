@@ -27,7 +27,7 @@ Do not assume fixed role identifiers; dynamically map requested roles to verifie
 - `@oracle` -> `oracle` or `lelouch`: Read-only pre- and post-implementation reviewer.
   Audits exploration and plan artifacts before editing starts, and audits complete diffs against test evidence after editing completes.
   Performs no file edits or test executions.
-- `@implement` -> `@fixer` / `fixer`: Sole editor and test runner.
+- `@fixer` -> `@fixer` or `fixer`: Sole editor and test runner.
   Applies code modifications, executes test suites, and fixes verification failures.
   Holds exclusive authority to mutate workspace files and run verification commands.
 
@@ -111,12 +111,5 @@ If any requested subagent role is undefined, unavailable, or subagent dispatch i
 ## Firstmate integration boundaries
 
 - This workflow operates inside an isolated task worktree and does not replace `fm-spawn.sh` or worktree verification.
+- Use it for Firstmate work only when the captain explicitly requests this staged workflow, and never layer its review or verification stages onto a no-mistakes delivery path.
 - Captain merge authority, `yolo` posture rules, `ask-user` escalation boundaries, and no-mistakes delivery paths remain fully in force.
-
-## Pressure-test verification evidence
-
-Verification evidence for this skill was validated across three core dimensions:
-
-- Ordering Discipline: Executed scenarios verified strict sequence enforcement (Explore -> Plan -> Pre-Impl Review -> Fixer -> Post-Impl Review). Attempts to skip exploration or leap to code editing were rejected by the gate protocol.
-- Artifact Handoff Rigor: Handoff packets were audited to strip unverified assumptions before reaching `@fixer`, preventing speculative code edits.
-- Dual Oracle Review Gates with Revision Loops: Both the pre-implementation plan gate and post-implementation diff gate were verified. Findings raised by `@oracle` triggered mandated revision loops back to `@plan` or `@fixer` respectively, requiring re-review before clearance.
