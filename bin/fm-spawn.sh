@@ -89,6 +89,14 @@
 #   secondmate receives the primary's read-only shared captain-preference file
 #   (fm-config-inherit-lib.sh). A successful launch clears pending inherited
 #   config reread generations because the new agent reads the converged files.
+#   Before any worktree, backend endpoint, agent process, or task metadata is
+#   created, every final model beginning with antigravity/ runs the installed
+#   deterministic quota checker with `check`. FM_ANTIGRAVITY_PREFLIGHT_BIN is
+#   the test override; otherwise the checker is resolved under
+#   ${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}/extensions/antigravity-account-switcher/.
+#   The checker runs with a bounded timeout and output stream. Exit 0 preserves
+#   the requested model and effort; documented exit 1 changes them to
+#   cockpit/gpt-5.6-luna and high; every other result refuses the spawn.
 #   --scout records kind=scout in the task's meta (report deliverable, scratch worktree;
 #   see AGENTS.md task lifecycle); --secondmate records kind=secondmate and launches in a
 #   provisioned firstmate home; the default is kind=ship.
@@ -422,6 +430,7 @@ SPAWN_TASK_LOCK_HELD=1
 PROJ=
 ARG3=
 FIRSTMATE_HOME=
+RAW_LAUNCH=0
 
 if [ "$KIND" = secondmate ]; then
   case "${POS[1]:-}" in
@@ -498,6 +507,7 @@ launch_template() {
 case "$ARG3" in
   *' '*)  # raw launch command (unverified-adapter escape hatch)
     LAUNCH=$ARG3
+    RAW_LAUNCH=1
     HARNESS=""
     for word in $LAUNCH; do
       case "$word" in [A-Za-z_]*=*) continue ;; *) HARNESS=$(basename "$word"); break ;; esac
@@ -563,6 +573,156 @@ if [ "$KIND" = secondmate ] && [ -z "$ARG3" ]; then
       esac
     fi
   fi
+fi
+
+antigravity_preflight() {
+  if [ "$RAW_LAUNCH" -eq 1 ] && [ -z "$MODEL" ]; then
+    local cleaned_word
+    for word in $LAUNCH; do
+      cleaned_word=$(printf '%s' "$word" | tr -d "\"'")
+      case "$cleaned_word" in
+        --model=antigravity/*) MODEL=${cleaned_word#--model=} ;;
+        antigravity/*) MODEL=$cleaned_word ;;
+      esac
+    done
+  fi
+
+  case "$MODEL" in
+    antigravity/*) ;;
+    *) return 0 ;;
+  esac
+
+  local checker agent_dir timeout_seconds output_bytes tmp_out rc
+  checker=${FM_ANTIGRAVITY_PREFLIGHT_BIN:-}
+  if [ -z "$checker" ]; then
+    agent_dir=${PI_CODING_AGENT_DIR:-${HOME:-}/.pi/agent}
+    checker="$agent_dir/extensions/antigravity-account-switcher/bin/antigravity-account-check.js"
+    if [ ! -f "$checker" ] || [ ! -x "$checker" ]; then
+      checker="$agent_dir/extensions/pi-antigravity-account-switcher/bin/antigravity-account-check.js"
+    fi
+  fi
+  if [ ! -f "$checker" ] || [ ! -x "$checker" ]; then
+    echo "error: Antigravity quota preflight checker is missing or not executable: $checker" >&2
+    return 1
+  fi
+
+  timeout_seconds=${FM_ANTIGRAVITY_PREFLIGHT_TIMEOUT_SECONDS:-30}
+  output_bytes=${FM_ANTIGRAVITY_PREFLIGHT_OUTPUT_BYTES:-8192}
+  case "$timeout_seconds" in
+    ''|*[!0-9]*)
+      echo "error: Antigravity quota preflight timeout is not a positive integer" >&2
+      return 1
+      ;;
+  esac
+  case "$output_bytes" in
+    ''|*[!0-9]*)
+      echo "error: Antigravity quota preflight output limit is not a positive integer" >&2
+      return 1
+      ;;
+  esac
+  [ "$timeout_seconds" -gt 0 ] || {
+    echo "error: Antigravity quota preflight timeout must be positive" >&2
+    return 1
+  }
+  [ "$output_bytes" -gt 0 ] || {
+    echo "error: Antigravity quota preflight output limit must be positive" >&2
+    return 1
+  }
+
+  if ! command -v perl >/dev/null 2>&1; then
+    echo "error: Antigravity quota preflight requires perl" >&2
+    return 1
+  fi
+
+  tmp_out=$(mktemp "${STATE}/.preflight-${ID}.XXXXXXXX" 2>/dev/null || mktemp "/tmp/.preflight-${ID}.XXXXXXXX")
+
+  set +e
+  perl -e '
+    my $t = shift; my $file = shift; my $limit = shift;
+    pipe(my $r, my $w) or die;
+    my $pid = fork; die "fork failed" unless defined $pid;
+    if (!$pid) {
+      close $r;
+      setpgrp(0, 0);
+      open(STDOUT, ">&", $w) or die;
+      open(STDERR, ">&", $w) or die;
+      close $w;
+      exec @ARGV;
+    }
+    close $w;
+    local $SIG{ALRM} = sub {
+      kill "TERM", -$pid;
+      select undef, undef, undef, 0.2;
+      kill "KILL", -$pid;
+      exit 124;
+    };
+    alarm $t;
+    open(my $out_fh, ">", $file) or die;
+    my $bytes_read = 0;
+    my $buf;
+    while (sysread($r, $buf, 4096)) {
+      if ($bytes_read < $limit) {
+        my $to_write = length($buf);
+        if ($bytes_read + $to_write > $limit) {
+          $to_write = $limit - $bytes_read;
+        }
+        syswrite($out_fh, substr($buf, 0, $to_write));
+        $bytes_read += $to_write;
+      }
+    }
+    close $out_fh;
+    close $r;
+    waitpid($pid, 0);
+    alarm 0;
+    my $sig = $? & 127;
+    my $rc = $sig ? 255 : ($? >> 8);
+    kill "TERM", -$pid;
+    select undef, undef, undef, 0.1;
+    kill "KILL", -$pid;
+    exit $rc;
+  ' "$timeout_seconds" "$tmp_out" "$output_bytes" "$checker" check >/dev/null 2>&1
+  rc=$?
+  set -e
+  rm -f "$tmp_out"
+
+  case "$rc" in
+    0) return 0 ;;
+    1)
+      MODEL=cockpit/gpt-5.6-luna
+      EFFORT=high
+      ANTIGRAVITY_FALLBACK=1
+      return 0
+      ;;
+    124)
+      echo "error: Antigravity quota preflight timed out" >&2
+      return 1
+      ;;
+    *)
+      echo "error: Antigravity quota preflight failed with unrecognized result (exit $rc)" >&2
+      return 1
+      ;;
+  esac
+}
+
+ANTIGRAVITY_FALLBACK=0
+antigravity_preflight || exit 1
+if [ "$ANTIGRAVITY_FALLBACK" -eq 1 ] && [ "$RAW_LAUNCH" -eq 1 ]; then
+  case "$LAUNCH" in
+    *'antigravity/'*)
+      LAUNCH=$(printf '%s' "$LAUNCH" | sed -E "s/['\"]?antigravity\/[^'\" ]+['\"]?/'cockpit\/gpt-5.6-luna'/g")
+      case "$LAUNCH" in
+        *--effort*)
+          LAUNCH=$(printf '%s' "$LAUNCH" | sed -E "s/--effort[ =]['\"]?[^'\" ]+['\"]?/--effort 'high'/g")
+          ;;
+        *)
+          LAUNCH="$LAUNCH --effort 'high'"
+          ;;
+      esac
+      ;;
+    *)
+      LAUNCH="$LAUNCH --model 'cockpit/gpt-5.6-luna' --effort 'high'"
+      ;;
+  esac
 fi
 
 secondmate_registry_value() {
