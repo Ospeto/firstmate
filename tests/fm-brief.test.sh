@@ -188,6 +188,62 @@ write_registry() {
 EOF
 }
 
+assert_specialist_rule() {
+  local brief=$1 context=$2
+  assert_grep "When it would materially improve the result, delegate non-trivial supporting work narrowly to the appropriate installed specialist" "$brief" \
+    "$context brief missing specialist delegation rule"
+  assert_grep "use \`@explorer\` for repository mapping and search, \`@plan\` for architecture or implementation planning, \`@oracle\` for independent correctness and risk review, and \`@designer\` for frontend, UI, and visual work." "$brief" \
+    "$context brief missing specialist selection guidance"
+  assert_grep "Inspect and incorporate returned findings yourself, while preserving this brief's isolation, approval, and delivery rules." "$brief" \
+    "$context brief missing delegation boundary guidance"
+}
+
+assert_web_research_rule() {
+  local brief=$1 context=$2
+  assert_grep "For web research, use Firecrawl MCP first: call \`firecrawl_search\`, call \`firecrawl_search_feedback\` after using its results, and use \`firecrawl_scrape\` for known pages." "$brief" \
+    "$context brief missing Firecrawl MCP routing rule"
+  assert_grep "If Firecrawl is unavailable, use another tool only as a fallback and disclose that fallback in your findings." "$brief" \
+    "$context brief missing Firecrawl fallback disclosure"
+}
+
+assert_review_path_rule() {
+  local brief=$1 context=$2
+  assert_grep "Before pre-commit review, record the base and HEAD SHAs, then have the reviewer inspect the exact committed range with \`git show <HEAD>\` or \`git diff <base>...<HEAD>\`" "$brief" \
+    "$context brief missing committed-range review verification"
+  assert_grep "if the review tool cannot access those commits or shows an empty range, report the mismatch instead of reviewing it." "$brief" \
+    "$context brief missing committed-range mismatch handling"
+}
+
+test_project_mode_defaults_and_rejects_malformed() {
+  local home out brief
+  home="$TMP_ROOT/project-mode-home"
+  mkdir -p "$home/data"
+  cat > "$home/data/projects.md" <<'EOF'
+- omitted-proj - omitted mode (added 2026-07-01)
+- explicit-proj [direct-PR] - explicit mode (added 2026-07-01)
+- malformed-proj [bogus +yolo] - malformed mode (added 2026-07-01)
+- malformed-yolo-proj [+yolo] - missing explicit mode (added 2026-07-01)
+- malformed-extra-proj [direct-PR +yolo unexpected] - malformed option (added 2026-07-01)
+EOF
+  out=$(FM_HOME="$home" "$ROOT/bin/fm-project-mode.sh" omitted-proj)
+  [ "$out" = "direct-PR on" ] || fail "omitted delivery mode did not default to direct-PR on"
+  out=$(FM_HOME="$home" "$ROOT/bin/fm-project-mode.sh" explicit-proj)
+  [ "$out" = "direct-PR off" ] || fail "explicit delivery mode did not preserve yolo off"
+  out=$(FM_HOME="$home" "$ROOT/bin/fm-project-mode.sh" malformed-proj 2>/dev/null)
+  [ "$out" = "no-mistakes off" ] || fail "malformed explicit mode did not fall back to no-mistakes off"
+  out=$(FM_HOME="$home" "$ROOT/bin/fm-project-mode.sh" malformed-yolo-proj 2>/dev/null)
+  [ "$out" = "no-mistakes off" ] || fail "malformed [+yolo] mode did not fall back to no-mistakes off"
+  out=$(FM_HOME="$home" "$ROOT/bin/fm-project-mode.sh" malformed-extra-proj 2>/dev/null)
+  [ "$out" = "no-mistakes off" ] || fail "malformed explicit option did not fall back to no-mistakes off"
+  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" omitted-brief omitted-proj >/dev/null
+  brief="$home/data/omitted-brief/brief.md"
+  assert_grep "This project ships **direct-PR**" "$brief" \
+    "omitted mode brief did not use direct-PR delivery"
+  assert_no_grep "This project ships **no-mistakes**" "$brief" \
+    "omitted mode brief used no-mistakes delivery"
+  pass "fm-project-mode: omitted mode defaults to direct-PR on and malformed modes fall back safely"
+}
+
 # fm-brief.sh must exit 0 and produce a brief with no unreplaced shell
 # metacharacter corruption for every ship delivery mode. This also guards
 # against any *new* unescaped apostrophe or unbalanced quote later added to
@@ -209,6 +265,9 @@ test_ship_modes_generate_clean_briefs() {
     assert_grep "{TASK}" "$brief" "$id: brief missing the {TASK} placeholder"
     assert_grep "mid-task \`working:\` line (including setup complete) is nonterminal" "$brief" \
       "$id: brief missing nonterminal working:/setup-complete gate protection"
+    assert_specialist_rule "$brief" "$id"
+    assert_web_research_rule "$brief" "$id"
+    assert_review_path_rule "$brief" "$id"
     assert_no_grep "EOF" "$brief" "$id: brief leaked a heredoc EOF marker (unterminated heredoc)"
   done
   pass "fm-brief.sh: no-mistakes/direct-PR/local-only briefs generate cleanly"
@@ -223,6 +282,8 @@ test_faster_paths_use_configured_authority_without_stacked_review() {
   brief="$home/data/$id/brief.md"
   assert_grep "The configured merge authority decides whether to merge the PR; firstmate relays the outcome." "$brief" \
     "direct-PR brief lost configured merge authority"
+  assert_grep "Before pushing or requesting a PR, ask \`@oracle\` for a fresh read-only review" "$brief" \
+    "direct-PR brief lost its Oracle review gate"
   assert_no_grep "The captain reviews and merges the PR" "$brief" \
     "direct-PR brief hard-coded captain-only authority"
   id="brief-local-authority-a4"
@@ -275,7 +336,9 @@ test_no_mistakes_dod_wording() {
   # guards the structure that makes it safe.
   assert_grep "firstmate's authority check" "$brief" \
     "no-mistakes DOD lost the apostrophe prose that the structural fix makes parse-safe"
-  pass "fm-brief.sh: no-mistakes DOD keeps its apostrophe prose, now parse-safe"
+  assert_no_grep "Before pushing or requesting a PR" "$brief" \
+    "no-mistakes brief must not add the direct-PR Oracle review gate"
+  pass "fm-brief.sh: no-mistakes DOD keeps its apostrophe prose without a direct-PR Oracle gate"
 }
 
 test_ship_project_memory_wording() {
@@ -621,6 +684,9 @@ test_scout_and_secondmate_scaffold() {
   assert_present "$brief" "scout brief was not scaffolded"
   assert_grep "SCOUT task" "$brief" "scout brief must declare itself a scout task"
   assert_grep "report.md" "$brief" "scout brief must point at the report deliverable"
+  assert_specialist_rule "$brief" "scout"
+  assert_web_research_rule "$brief" "scout"
+  assert_review_path_rule "$brief" "scout"
 
   FM_SECONDMATE_CHARTER='Supervise the alpha domain.' \
     FM_HOME="$BRIEF_HOME" "$ROOT/bin/fm-brief.sh" brief-sm-q6 --secondmate alpha >/dev/null 2>&1 \
@@ -633,6 +699,7 @@ test_scout_and_secondmate_scaffold() {
 }
 
 test_script_parses
+test_project_mode_defaults_and_rejects_malformed
 test_no_heredoc_in_command_substitution
 test_help_includes_entire_header
 test_ship_modes_generate_clean_briefs

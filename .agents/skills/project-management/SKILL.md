@@ -37,17 +37,18 @@ Do not overwrite or repurpose an existing path.
 
 Choose the delivery mode when adding or creating the project:
 
-- `no-mistakes` runs the full validation pipeline before a PR and is the default when the captain does not specify a mode.
 - `direct-PR` pushes and opens a PR without the no-mistakes pipeline.
+- `no-mistakes` runs the full validation pipeline before a PR.
 - `local-only` has no required remote or PR and lands only through the approved local fast-forward path.
 
-The optional `+yolo` posture changes routine approval authority but does not change the delivery mode.
-Default it off, and enable it only on the captain's explicit instruction.
+When the captain omits the mode, default to `direct-PR +yolo`.
+An explicit mode without `+yolo` keeps routine approval authority off; an explicit `+yolo` enables it without changing delivery mode.
 `AGENTS.md` section 7 owns the complete authority boundary and exceptions when it is on.
 
 ## Add or clone an existing project
 
 Confirm the source URL, local project name, delivery mode, and autonomy posture.
+If the captain omits delivery mode, use `direct-PR +yolo`.
 Clone into `projects/<name>` and add the registry entry only after the destination is known to be unused.
 A `no-mistakes` project must have an `origin` remote and must complete the initialization procedure below.
 A `direct-PR` project needs an `origin` remote but skips no-mistakes initialization.
@@ -56,7 +57,7 @@ A `local-only` project may have no remote and skips no-mistakes initialization.
 ## Create a project
 
 Creating a GitHub repository is outward-facing.
-Before making that remote change, propose the repository name, owner or organization, visibility, and delivery mode, defaulting visibility to private and delivery mode to `no-mistakes`, then obtain the captain's explicit consent for those values.
+Before making that remote change, propose the repository name, owner or organization, visibility, and delivery mode, defaulting visibility to private and delivery mode to `direct-PR +yolo`, then obtain the captain's explicit consent for those values.
 Use `gh-axi` for the approved GitHub operation and consult its current help rather than relying on remembered flags.
 After remote creation succeeds, clone it locally, add the registry entry, and initialize it according to its delivery mode.
 

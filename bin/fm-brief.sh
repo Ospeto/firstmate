@@ -29,8 +29,8 @@
 # For ship tasks, the definition of done is shaped by the project's delivery mode
 # (data/projects.md via fm-project-mode.sh; see the project-management skill
 # and AGENTS.md task lifecycle):
-#   no-mistakes  implement -> /no-mistakes pipeline -> PR -> captain merge (default)
-#   direct-PR    implement -> push + open PR via gh-axi (no pipeline) -> captain merge
+#   direct-PR    implement -> push + open PR via gh-axi (no pipeline) -> captain merge (omitted mode defaults to direct-PR +yolo)
+#   no-mistakes  implement -> /no-mistakes pipeline -> PR -> captain merge
 #   local-only   implement on branch, stop and report "ready in branch" (no push/PR);
 #                captain approves, firstmate merges to local main
 # Ship briefs begin with a worktree-isolation assertion before the branch step.
@@ -247,6 +247,10 @@ EOF
 HERDR_SECTION=${HERDR_SECTION%$'\n'}
 fi
 
+SPECIALIST_RULE="8. When it would materially improve the result, delegate non-trivial supporting work narrowly to the appropriate installed specialist: use \`@explorer\` for repository mapping and search, \`@plan\` for architecture or implementation planning, \`@oracle\` for independent correctness and risk review, and \`@designer\` for frontend, UI, and visual work. Inspect and incorporate returned findings yourself, while preserving this brief's isolation, approval, and delivery rules."
+WEB_RESEARCH_RULE="9. For web research, use Firecrawl MCP first: call \`firecrawl_search\`, call \`firecrawl_search_feedback\` after using its results, and use \`firecrawl_scrape\` for known pages. If Firecrawl is unavailable, use another tool only as a fallback and disclose that fallback in your findings."
+REVIEW_PATH_RULE="10. Before pre-commit review, record the base and HEAD SHAs, then have the reviewer inspect the exact committed range with \`git show <HEAD>\` or \`git diff <base>...<HEAD>\`; if the review tool cannot access those commits or shows an empty range, report the mismatch instead of reviewing it."
+
 if [ "$KIND" = scout ]; then
 cat > "$BRIEF" <<EOF
 You are a crewmate: an autonomous worker agent managed by firstmate. Work on your own; do not wait for a human.
@@ -283,6 +287,9 @@ The report is the only thing that survives, so anything worth keeping must be in
 7. Never stop, restart, or update the shared \`no-mistakes\` daemon - it is one instance serving
    every lane/home, so restarting it kills other lanes' in-flight pipeline runs. On ANY no-mistakes
    daemon error, append \`blocked: {the daemon error}\` and stop; only firstmate manages the daemon.
+$SPECIALIST_RULE
+$WEB_RESEARCH_RULE
+$REVIEW_PATH_RULE
 
 # Definition of done
 Write your findings to \`$DATA/$ID/report.md\`.
@@ -310,7 +317,9 @@ case "$MODE" in
 # Definition of done
 This project ships **direct-PR**: you raise the PR yourself, without the no-mistakes pipeline.
 The task is complete only when committed on your branch.
-When it is implemented and committed, push your branch and open a PR with \`gh-axi\`, then append \`done: PR {url}\` to the status file and stop.
+Before pushing or requesting a PR, ask \`@oracle\` for a fresh read-only review of the complete diff and verification evidence.
+Resolve every finding and rerun affected checks; if \`@oracle\` is unavailable, append \`blocked: {why}\` and stop without requesting a PR.
+When it is implemented, reviewed, and committed, push your branch and open a PR with \`gh-axi\`, then append \`done: PR {url}\` to the status file and stop.
 Do NOT run /no-mistakes. The configured merge authority decides whether to merge the PR; firstmate relays the outcome.
 EOF
     ;;
@@ -326,7 +335,7 @@ When it is implemented and committed, append \`done: ready in branch fm/$ID\` to
 The configured merge authority approves the ready branch, then firstmate merges it into local \`main\` through the guarded fast-forward path.
 EOF
     ;;
-  *)  # no-mistakes (default)
+  *)  # no-mistakes fallback
     SETUP2="
 2. Run \`no-mistakes doctor\`; if it reports the repo is not initialized here, run \`no-mistakes init\`."
     RULE1='1. Never push to the default branch. Never merge a PR.'
@@ -398,6 +407,9 @@ $RULE1
 7. Never stop, restart, or update the shared \`no-mistakes\` daemon - it is one instance serving
    every lane/home, so restarting it kills other lanes' in-flight pipeline runs. On ANY no-mistakes
    daemon error, append \`blocked: {the daemon error}\` and stop; only firstmate manages the daemon.
+$SPECIALIST_RULE
+$WEB_RESEARCH_RULE
+$REVIEW_PATH_RULE
 
 # Project memory
 If \`AGENTS.md\` or \`CLAUDE.md\` already exists, or if this task produced durable project-intrinsic knowledge, run \`$FM_ROOT/bin/fm-ensure-agents-md.sh .\` in the worktree.

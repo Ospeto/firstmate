@@ -4,20 +4,20 @@
 # no-mistakes|direct-PR|local-only and yolo is on|off.
 #
 # Registry line format (data/projects.md):
-#   - <name> - <desc> (added <date>)                  -> no-mistakes off  (legacy default)
+#   - <name> - <desc> (added <date>)                  -> direct-PR on  (omitted mode default)
 #   - <name> [<mode>] - <desc> (added <date>)          -> <mode> off
 #   - <name> [<mode> +yolo] - <desc> (added <date>)    -> <mode> on
 #
 # mode = how a finished change reaches main:
-#   no-mistakes  full pipeline -> PR -> captain merge (default)
+#   no-mistakes  full pipeline -> PR -> captain merge
 #   direct-PR    push + PR via gh-axi, no pipeline -> captain merge
 #   local-only   local branch, no remote/PR -> captain approve -> guarded local merge
 # yolo (orthogonal) = when on, firstmate may make routine approval decisions itself.
 #   AGENTS.md section 7 is the single owner of authority exceptions, including
 #   ask-user contract expansion and stronger captain boundaries.
 #
-# An unknown/missing project or unknown mode falls back to "no-mistakes off" and warns
-# to stderr, so a typo never silently drops the gate.
+# An unknown/missing project or malformed explicit mode falls back to
+# "no-mistakes off" and warns to stderr, so uncertainty never drops the gate.
 # Usage: fm-project-mode.sh <project-name>
 set -eu
 
@@ -37,14 +37,25 @@ fi
 # awk emits "<mode> <yolo>" (one line) or nothing if the project is absent.
 parsed=$(awk -v n="$NAME" '
   $1=="-" && $2==n {
-    mode="no-mistakes"; yolo="off";
+    mode="direct-PR"; yolo="on";
     if ($3 ~ /^\[/) {
-      s="";
-      for (i=3; i<=NF; i++) { s = s (s==""?"":" ") $i; if ($i ~ /\]$/) break }
-      gsub(/^\[|\]$/, "", s);           # strip the surrounding brackets
-      k = split(s, a, " ");
-      if (a[1] != "" && a[1] != "+yolo") mode = a[1];
-      for (j=1; j<=k; j++) if (a[j]=="+yolo") yolo="on";
+      s=""; closed=0;
+      for (i=3; i<=NF; i++) {
+        s = s (s==""?"":" ") $i;
+        if ($i ~ /\]$/) { closed=1; break }
+      }
+      if (!closed) { print "invalid"; exit }
+      gsub(/^\[/, "", s); gsub(/\]$/, "", s);
+      k = split(s, a, " "); valid=1;
+      if (k < 1 || a[1] == "") valid=0;
+      if (a[1] !~ /^(no-mistakes|direct-PR|local-only)$/) valid=0;
+      else mode=a[1];
+      yolo="off";
+      for (j=2; j<=k; j++) {
+        if (a[j] == "+yolo" && yolo == "off") yolo="on";
+        else valid=0;
+      }
+      if (!valid) { print "invalid"; exit }
     }
     print mode, yolo; exit
   }
@@ -52,6 +63,12 @@ parsed=$(awk -v n="$NAME" '
 
 if [ -z "$parsed" ]; then
   echo "warn: project \"$NAME\" not in registry; defaulting to no-mistakes off" >&2
+  echo "no-mistakes off"
+  exit 0
+fi
+
+if [ "$parsed" = invalid ]; then
+  echo "warn: malformed mode for $NAME; defaulting to no-mistakes off" >&2
   echo "no-mistakes off"
   exit 0
 fi
