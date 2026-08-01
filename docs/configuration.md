@@ -265,6 +265,16 @@ Malformed JSON, an empty or malformed rule/default array, an unverified harness,
 While the file remains present, no crewmate or scout spawn may proceed without an explicit resolved harness; malformed configuration must be reported and corrected rather than selected around.
 Secondmate homes inherit this file from the primary, so a secondmate's own crewmates apply the same dispatch profile behavior.
 
+## Antigravity quota preflight
+
+Before `fm-spawn.sh` creates a worktree, backend endpoint, agent process, or task metadata, every final model whose name begins with `antigravity/` must pass the Antigravity quota preflight.
+The checker is the executable `antigravity-account-check.js` under `${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}/extensions/antigravity-account-switcher/bin/`, unless the test-only `FM_ANTIGRAVITY_PREFLIGHT_BIN` override is set.
+The preflight invokes that checker with `check`, bounds its runtime with `FM_ANTIGRAVITY_PREFLIGHT_TIMEOUT_SECONDS` (default `30` seconds), and discards output after the bounded `FM_ANTIGRAVITY_PREFLIGHT_OUTPUT_BYTES` limit (default `8192` bytes) so checker output cannot be surfaced as a secret-bearing diagnostic.
+Exit `0` preserves the requested model and effort.
+The checker's documented exit `1` means all configured accounts are unusable and changes the final profile to `cockpit/gpt-5.6-luna` at `high` effort.
+Missing or non-executable checkers, invalid limits, missing timeout support, timeouts, crashes, errors, and unknown exit results refuse the spawn before those side effects occur.
+The same boundary applies to explicit models, dispatch-profile models, scouts, secondmates, and raw launch commands, while non-Antigravity models bypass it.
+
 ## Toolchain
 
 On session start the first mate detects what its required toolchain is missing or too old and lists each problem with either an exact install command or manual instructions.
