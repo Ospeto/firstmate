@@ -317,8 +317,8 @@ case "$MODE" in
 # Definition of done
 This project ships **direct-PR**: you raise the PR yourself, without the no-mistakes pipeline.
 The task is complete only when committed on your branch.
-Before pushing or requesting a PR, ask \`@oracle\` for a fresh read-only review of the complete diff and verification evidence.
-Resolve every finding and rerun affected checks; if \`@oracle\` is unavailable, append \`blocked: {why}\` and stop without requesting a PR.
+Before pushing or requesting a PR, if this task or the captain requires an independent review, ask \`@oracle\` for a fresh read-only review of the complete diff and verification evidence.
+Resolve every finding and rerun affected checks; if that review is required but \`@oracle\` is unavailable, append \`blocked: {why}\` and stop without requesting a PR.
 When it is implemented, reviewed, and committed, push your branch and open a PR with \`gh-axi\`, then append \`done: PR {url}\` to the status file and stop.
 Do NOT run /no-mistakes. The configured merge authority decides whether to merge the PR; firstmate relays the outcome.
 EOF

@@ -282,8 +282,8 @@ test_faster_paths_use_configured_authority_without_stacked_review() {
   brief="$home/data/$id/brief.md"
   assert_grep "The configured merge authority decides whether to merge the PR; firstmate relays the outcome." "$brief" \
     "direct-PR brief lost configured merge authority"
-  assert_grep "Before pushing or requesting a PR, ask \`@oracle\` for a fresh read-only review" "$brief" \
-    "direct-PR brief lost its Oracle review gate"
+  assert_grep "Before pushing or requesting a PR, if this task or the captain requires an independent review, ask \`@oracle\` for a fresh read-only review" "$brief" \
+    "direct-PR brief lost its Oracle review guidance"
   assert_no_grep "The captain reviews and merges the PR" "$brief" \
     "direct-PR brief hard-coded captain-only authority"
   id="brief-local-authority-a4"
