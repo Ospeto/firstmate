@@ -801,6 +801,9 @@ case "\${1:-}" in
   display-message)
     for a in "\$@"; do case "\$a" in *pane_current_path*) printf '%s\\n' "$wt"; exit 0 ;; esac; done
     printf 'firstmate\\n'; exit 0 ;;
+  capture-pane)
+    printf 'bash-5.2$ \\n'
+    exit 0 ;;
   list-windows) exit 0 ;;
 esac
 exit 0
@@ -871,6 +874,9 @@ case "\${1:-}" in
       exit 0
     ;; esac; done
     printf 'firstmate\\n'; exit 0 ;;
+  capture-pane)
+    printf 'bash-5.2$ \\n'
+    exit 0 ;;
   list-windows) exit 0 ;;
 esac
 exit 0

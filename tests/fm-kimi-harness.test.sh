@@ -58,15 +58,25 @@ case "$*" in
 esac
 case "${1:-}" in
   display-message) printf 'firstmate\n'; exit 0 ;;
+  capture-pane) fake_screen; exit 0 ;;
   list-windows) exit 0 ;;
   has-session|new-session|new-window|kill-window) exit 0 ;;
   send-keys)
     prev=
     literal=
+    cmd=
     for arg in "$@"; do
       if [ "$prev" = -l ]; then literal=$arg; break; fi
       prev=$arg
     done
+    if [ -z "$literal" ]; then
+      for arg in "$@"; do
+        case "$arg" in
+          *' --auto'*) cmd=$arg ;;
+        esac
+      done
+    fi
+
     if [ -n "$literal" ]; then
       case "$literal" in
         *' --auto')
@@ -78,6 +88,14 @@ case "${1:-}" in
           printf 'pointer-typed\n' > "$FM_FAKE_KIMI_STATE"
           ;;
       esac
+      exit 0
+    elif [ -n "$cmd" ]; then
+      printf '%s\n' "$cmd" >> "$FM_FAKE_LAUNCH_LOG"
+      if [ "${FM_FAKE_KIMI_READY:-yes}" = yes ]; then
+        printf 'ready\n' > "$FM_FAKE_KIMI_STATE"
+      else
+        printf 'launched\n' > "$FM_FAKE_KIMI_STATE"
+      fi
       exit 0
     fi
     case " $* " in

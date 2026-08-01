@@ -738,6 +738,69 @@ fm_backend_send_text_submit() {  # <backend> <target> <text> <retries> <enter-sl
   esac
 }
 
+# fm_backend_launch_submit: submit a launch command to a pane shell and confirm
+# that the command was accepted and executed by the shell, retrying Enter if
+# Enter was dropped or swallowed during shell startup/settle.
+fm_backend_launch_submit() {  # <backend> <target> <launch_cmd> [retries] [enter-sleep] [expected-label]
+  local backend=$1 target=$2 launch_cmd=$3
+  local retries=${4:-${FM_LAUNCH_SUBMIT_RETRIES:-10}}
+  local sleep_s=${5:-${FM_LAUNCH_SUBMIT_SLEEP:-0.3}}
+  local expected_label=${6:-}
+  local i=0 capture sig unsubmitted last_lines cap_rc
+
+  fm_backend_source "$backend" || return 1
+
+  case "$backend" in
+    tmux) fm_backend_tmux_send_text_line "$target" "$launch_cmd" || return 1 ;;
+    herdr) fm_backend_herdr_send_text_line "$target" "$launch_cmd" || return 1 ;;
+    zellij) fm_backend_zellij_send_text_line "$target" "$launch_cmd" "$expected_label" || return 1 ;;
+    orca) fm_backend_orca_send_text_line "$target" "$launch_cmd" || return 1 ;;
+    cmux) fm_backend_cmux_send_text_line "$target" "$launch_cmd" "$expected_label" || return 1 ;;
+    *) echo "error: no send-text-line implementation for backend '$backend'" >&2; return 1 ;;
+  esac
+
+  sig=$(printf '%s' "$launch_cmd" | grep -v '^[[:space:]]*$' | head -n 1)
+  sig=${sig:0:40}
+
+  while :; do
+    sleep "$sleep_s"
+    if capture=$(fm_backend_capture "$backend" "$target" 15 "$expected_label" 2>/dev/null); then
+      cap_rc=0
+    else
+      cap_rc=$?
+      capture=""
+    fi
+
+    unsubmitted=0
+    if [ "$cap_rc" -ne 0 ] || [ -z "$capture" ]; then
+      unsubmitted=1
+    elif [ -n "$sig" ]; then
+      last_lines=$(printf '%s\n' "$capture" | grep -v '^[[:space:]]*$' | tail -n 3)
+      if [[ "$last_lines" == *"$sig"* ]]; then
+        unsubmitted=1
+      fi
+    fi
+
+    if [ "$unsubmitted" -eq 0 ]; then
+      return 0
+    fi
+
+    i=$((i + 1))
+    if [ "$i" -ge "$retries" ]; then
+      echo "error: launch command failed to submit after $retries attempts for target $target (command remains sitting at shell prompt)" >&2
+      return 1
+    fi
+
+    case "$backend" in
+      tmux) fm_backend_tmux_send_key "$target" Enter || return 1 ;;
+      herdr) fm_backend_herdr_send_key "$target" Enter || return 1 ;;
+      zellij) fm_backend_zellij_send_key "$target" Enter "$expected_label" || return 1 ;;
+      orca) fm_backend_orca_send_key "$target" Enter || return 1 ;;
+      cmux) fm_backend_cmux_send_key "$target" Enter "$expected_label" || return 1 ;;
+    esac
+  done
+}
+
 # fm_backend_kill: remove the task's session endpoint (best-effort; a
 # nonexistent/already-gone target is not an error - callers already swallow
 # failures here exactly as the inline `tmux kill-window ... || true` did).

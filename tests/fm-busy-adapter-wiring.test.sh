@@ -29,6 +29,7 @@ case "$*" in
 esac
 case "${1:-}" in
   display-message) printf 'firstmate\n'; exit 0 ;;
+  capture-pane) printf 'bash-5.2$ \n'; exit 0 ;;
   list-windows) exit 0 ;;
   has-session|new-session|new-window|kill-window|send-keys) exit 0 ;;
 esac

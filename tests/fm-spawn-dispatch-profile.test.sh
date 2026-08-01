@@ -24,17 +24,24 @@ case "$*" in
 esac
 case "${1:-}" in
   display-message) printf 'firstmate\n'; exit 0 ;;
+  capture-pane) printf 'bash-5.2$ \n'; exit 0 ;;
   list-windows) exit 0 ;;
   has-session|new-session|new-window|kill-window) exit 0 ;;
   send-keys)
     if [ -n "${FM_FAKE_LAUNCH_LOG:-}" ]; then
-      prev=
+      cmd=""
+      prev=""
       for a in "$@"; do
         if [ "$prev" = "-l" ]; then
-          printf '%s\n' "$a" >> "$FM_FAKE_LAUNCH_LOG"
+          cmd="$a"
+        elif [ "$prev" != "" ] && [ "$prev" != "send-keys" ] && [ "$prev" != "-t" ] && [ "$a" != "Enter" ]; then
+          case "$prev" in *:*|firstmate|firstmate:*) cmd="$a" ;; esac
         fi
         prev=$a
       done
+      if [ -n "$cmd" ] && case "$cmd" in export\ GOTMPDIR=*|treehouse\ get) false ;; *) true ;; esac; then
+        printf '%s\n' "$cmd" >> "$FM_FAKE_LAUNCH_LOG"
+      fi
     fi
     exit 0
     ;;

@@ -1240,6 +1240,9 @@ spawn_send_key() {  # <target> <key>
     cmux) fm_backend_cmux_send_key "$1" "$2" "$W" ;;
   esac
 }
+spawn_launch_submit() {  # <target> <launch_cmd>
+  fm_backend_launch_submit "$BACKEND" "$1" "$2" "${FM_LAUNCH_SUBMIT_RETRIES:-10}" "${FM_LAUNCH_SUBMIT_SLEEP:-0.3}" "$W"
+}
 
 kimi_capture() {
   fm_backend_capture "$BACKEND" "$T" 120 "$W" 2>/dev/null || true
@@ -1681,13 +1684,16 @@ fi
 # the env is set when the agent starts; the brief sleep lets the export land.
 spawn_send_text_line "$T" "export GOTMPDIR=$TASK_TMP/gotmp"
 sleep 0.3
-spawn_send_literal "$T" "$LAUNCH"
-sleep 0.3
 if [ "${HERDR_PROJECTED:-0}" -eq 1 ]; then
-  HERDR_PROJECTION_ABORT_CLEANUP=0
   spawn_herdr_presentation_order_lock_release
 fi
-spawn_send_key "$T" Enter
+if ! spawn_launch_submit "$T" "$LAUNCH"; then
+  echo "error: launch command failed to submit for task $ID ($W)" >&2
+  exit 1
+fi
+if [ "${HERDR_PROJECTED:-0}" -eq 1 ]; then
+  HERDR_PROJECTION_ABORT_CLEANUP=0
+fi
 if [ "$HARNESS" = kimi ]; then
   if ! kimi_wait_for_ready; then
     kimi_spawn_fail "kimi did not show a verified ready signal before brief delivery"
