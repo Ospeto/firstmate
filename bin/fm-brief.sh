@@ -247,9 +247,9 @@ EOF
 HERDR_SECTION=${HERDR_SECTION%$'\n'}
 fi
 
-SPECIALIST_RULE="8. When it would materially improve the result, delegate non-trivial supporting work narrowly to the appropriate installed specialist: use \`@explorer\` for repository mapping and search, \`@plan\` for architecture or implementation planning, \`@oracle\` for independent correctness and risk review, and \`@designer\` for frontend, UI, and visual work. Inspect and incorporate returned findings yourself, while preserving this brief's isolation, approval, and delivery rules."
+SPECIALIST_RULE="8. When it would materially improve the result, delegate non-trivial supporting work narrowly to the appropriate installed specialist: use \`@explorer\` for repository mapping and search, \`@plan\` for architecture or implementation planning, \`@oracle\` for explicitly authorized independent correctness and risk review, and \`@designer\` for frontend, UI, and visual work. Inspect and incorporate returned findings yourself, while preserving this brief's isolation, approval, and delivery rules."
 WEB_RESEARCH_RULE="9. For web research, use Firecrawl MCP first: call \`firecrawl_search\`, call \`firecrawl_search_feedback\` after using its results, and use \`firecrawl_scrape\` for known pages. If Firecrawl is unavailable, use another tool only as a fallback and disclose that fallback in your findings."
-REVIEW_PATH_RULE="10. Before pre-commit review, record the base and HEAD SHAs, then have the reviewer inspect the exact committed range with \`git show <HEAD>\` or \`git diff <base>...<HEAD>\`; if the review tool cannot access those commits or shows an empty range, report the mismatch instead of reviewing it."
+REVIEW_PATH_RULE="10. Before pre-commit review, record the base and HEAD SHAs, then have the reviewer inspect the exact committed range with \`git diff <base>...<HEAD>\` and use \`git show <base>..<HEAD>\` for commit details; if the review tool cannot access those commits or shows an empty range, report the mismatch instead of reviewing it."
 
 if [ "$KIND" = scout ]; then
 cat > "$BRIEF" <<EOF

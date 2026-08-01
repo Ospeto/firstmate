@@ -192,7 +192,7 @@ assert_specialist_rule() {
   local brief=$1 context=$2
   assert_grep "When it would materially improve the result, delegate non-trivial supporting work narrowly to the appropriate installed specialist" "$brief" \
     "$context brief missing specialist delegation rule"
-  assert_grep "use \`@explorer\` for repository mapping and search, \`@plan\` for architecture or implementation planning, \`@oracle\` for independent correctness and risk review, and \`@designer\` for frontend, UI, and visual work." "$brief" \
+  assert_grep "use \`@explorer\` for repository mapping and search, \`@plan\` for architecture or implementation planning, \`@oracle\` for explicitly authorized independent correctness and risk review, and \`@designer\` for frontend, UI, and visual work." "$brief" \
     "$context brief missing specialist selection guidance"
   assert_grep "Inspect and incorporate returned findings yourself, while preserving this brief's isolation, approval, and delivery rules." "$brief" \
     "$context brief missing delegation boundary guidance"
@@ -208,7 +208,7 @@ assert_web_research_rule() {
 
 assert_review_path_rule() {
   local brief=$1 context=$2
-  assert_grep "Before pre-commit review, record the base and HEAD SHAs, then have the reviewer inspect the exact committed range with \`git show <HEAD>\` or \`git diff <base>...<HEAD>\`" "$brief" \
+  assert_grep "Before pre-commit review, record the base and HEAD SHAs, then have the reviewer inspect the exact committed range with \`git diff <base>...<HEAD>\` and use \`git show <base>..<HEAD>\` for commit details" "$brief" \
     "$context brief missing committed-range review verification"
   assert_grep "if the review tool cannot access those commits or shows an empty range, report the mismatch instead of reviewing it." "$brief" \
     "$context brief missing committed-range mismatch handling"
