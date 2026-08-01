@@ -101,6 +101,15 @@ fm_backend_tmux_current_path() {  # <target>
   tmux display-message -p -t "$1" '#{pane_current_path}' 2>/dev/null
 }
 
+fm_backend_tmux_launch_active() {  # <target>
+  local command
+  command=$(fm_backend_tmux_current_command "$1") || return 1
+  case "$command" in
+    ''|sh|bash|zsh|dash|ksh|fish) return 1 ;;
+    *) return 0 ;;
+  esac
+}
+
 # fm_backend_tmux_send_text_line: send one line of TEXT then Enter atomically.
 # Used for fixed spawn-time commands; launch submission adds shared bounded
 # confirmation in fm_backend_launch_submit. Mirrors

@@ -2291,6 +2291,22 @@ fm_backend_herdr_current_path() {  # <target>
     | jq -r '.result.pane.foreground_cwd // empty' 2>/dev/null
 }
 
+# True only when structured process data proves that the pane shell has handed
+# the foreground to the submitted launch command. This distinguishes a quiet,
+# long-running command from identical text still sitting at the shell prompt.
+fm_backend_herdr_launch_active() {  # <target>
+  local out
+  fm_backend_herdr_target_ready "$1" || return 1
+  [ "$(fm_backend_herdr_pane_agent_state "$FM_BACKEND_HERDR_SESSION" "$FM_BACKEND_HERDR_PANE")" = live ] && return 0
+  out=$(fm_backend_herdr_cli "$FM_BACKEND_HERDR_SESSION" pane process-info --pane "$FM_BACKEND_HERDR_PANE" 2>/dev/null) || return 1
+  printf '%s' "$out" | jq -e '
+    .result.process_info as $p
+    | ($p.shell_pid | type) == "number"
+      and ($p.foreground_processes | type) == "array"
+      and any($p.foreground_processes[]?; .pid != $p.shell_pid)
+  ' >/dev/null 2>&1
+}
+
 # fm_backend_herdr_send_text_line: send one line of TEXT then submit,
 # ATOMICALLY - mirrors tmux's `send-keys -t T text Enter`. Used for fixed
 # spawn-time commands; launch submission adds shared bounded confirmation in

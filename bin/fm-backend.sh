@@ -754,7 +754,12 @@ fm_backend_launch_submit() {  # <backend> <target> <launch_cmd> [retries] [enter
     tmux) fm_backend_tmux_send_text_line "$target" "$launch_cmd" || return 1 ;;
     herdr) fm_backend_herdr_send_text_line "$target" "$launch_cmd" || return 1 ;;
     zellij) fm_backend_zellij_send_text_line "$target" "$launch_cmd" "$expected_label" || return 1 ;;
-    orca) fm_backend_orca_send_text_line "$target" "$launch_cmd" || return 1 ;;
+    # Orca's terminal-send API submits text and Enter atomically but exposes no
+    # foreground-process primitive with which to verify a quiet launch.
+    orca)
+      fm_backend_orca_send_text_line "$target" "$launch_cmd" || return 1
+      return 0
+      ;;
     cmux) fm_backend_cmux_send_text_line "$target" "$launch_cmd" "$expected_label" || return 1 ;;
     *) echo "error: no send-text-line implementation for backend '$backend'" >&2; return 1 ;;
   esac
@@ -766,6 +771,10 @@ fm_backend_launch_submit() {  # <backend> <target> <launch_cmd> [retries] [enter
 
   while :; do
     sleep "$sleep_s"
+    case "$backend" in
+      tmux) fm_backend_tmux_launch_active "$target" && return 0 ;;
+      herdr) fm_backend_herdr_launch_active "$target" && return 0 ;;
+    esac
     if capture=$(fm_backend_capture "$backend" "$target" 15 "$expected_label" 2>/dev/null); then
       cap_rc=0
     else

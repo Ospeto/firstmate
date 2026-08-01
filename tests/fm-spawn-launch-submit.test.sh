@@ -43,7 +43,15 @@ case "\$*" in
 esac
 
 case "\${1:-}" in
-  display-message) printf 'firstmate\n'; exit 0 ;;
+  display-message)
+    case "\$*" in
+      *"#{pane_current_command}"*)
+        [ "\$(cat "\$state.mode" 2>/dev/null || true)" = submitted_no_output ] && printf 'node\n' || printf 'bash\n'
+        ;;
+      *) printf 'firstmate\n' ;;
+    esac
+    exit 0
+    ;;
   list-windows) exit 0 ;;
   has-session|new-session|new-window|kill-window) exit 0 ;;
   capture-pane)
@@ -92,6 +100,9 @@ case "\${1:-}" in
               printf 'recovered\n' > "\$state.mode"
               ;;
             swallowed_always)
+              printf 'bash-5.2$ %s\n' "\$sent_text" > "\$state"
+              ;;
+            submitted_no_output)
               printf 'bash-5.2$ %s\n' "\$sent_text" > "\$state"
               ;;
             *)
@@ -250,21 +261,16 @@ test_submitted_command_with_output_echo() {
   PATH="$fakebin:$PATH" export PATH
 
   local cmd="pi --mode crew -e /tmp/turnend"
-  # Pane capture contains echoed command on line 2, but active prompt on last line
-  cat > "$case_dir/tmux-state" <<EOF
-bash-5.2$ pi --mode crew -e /tmp/turnend
-pi --mode crew -e /tmp/turnend
-Pi v0.1.0
-│ >
-EOF
-  printf 'normal\n' > "$case_dir/tmux-state.mode"
+  # A quiet long-running launch leaves its echoed command as the last visible
+  # line; the foreground process, not scrollback text, proves it submitted.
+  printf 'submitted_no_output\n' > "$case_dir/tmux-state.mode"
 
   local rc=0
   FM_LAUNCH_SUBMIT_RETRIES=3 FM_LAUNCH_SUBMIT_SLEEP=0.01 \
     fm_backend_launch_submit "tmux" "firstmate:0" "$cmd" 3 0.01 "w1" || rc=$?
 
   [ "$rc" -eq 0 ] || { echo "test 6 failed: expected rc=0, got $rc" >&2; exit 1; }
-  echo "ok 6 - submitted command with output/echo confirmed via active prompt line"
+  echo "ok 6 - quiet submitted command confirmed by its foreground process"
 }
 
 # --- Test 7: Capture failure handling (cap_rc != 0) ---
