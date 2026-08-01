@@ -746,7 +746,7 @@ fm_backend_launch_submit() {  # <backend> <target> <launch_cmd> [retries] [enter
   local retries=${4:-${FM_LAUNCH_SUBMIT_RETRIES:-10}}
   local sleep_s=${5:-${FM_LAUNCH_SUBMIT_SLEEP:-0.3}}
   local expected_label=${6:-}
-  local i=0 capture sig unsubmitted active_line cap_rc
+  local i=0 capture sig unsubmitted active_tail cap_rc
 
   fm_backend_source "$backend" || return 1
 
@@ -777,8 +777,8 @@ fm_backend_launch_submit() {  # <backend> <target> <launch_cmd> [retries] [enter
     if [ "$cap_rc" -ne 0 ] || [ -z "$capture" ]; then
       unsubmitted=1
     elif [ -n "$sig" ]; then
-      active_line=$(printf '%s\n' "$capture" | grep -v '^[[:space:]]*$' | tail -n 1)
-      if [[ "$active_line" == *"$sig"* ]]; then
+      active_tail=$(printf '%s\n' "$capture" | grep -v '^[[:space:]]*$' | tr -d '\n')
+      if [[ "$active_tail" == *"$sig" ]]; then
         unsubmitted=1
       fi
     fi

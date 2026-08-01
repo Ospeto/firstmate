@@ -234,6 +234,10 @@ test_long_wrapped_launch_command() {
     fm_backend_launch_submit "tmux" "firstmate:0" "$long_cmd" 5 0.01 "w1" || rc=$?
 
   [ "$rc" -eq 0 ] || { echo "test 5 failed: expected rc=0, got $rc" >&2; exit 1; }
+  grep -Fq 'send-keys -t firstmate:0 Enter' "$case_dir/tmux.log" || {
+    echo "test 5 failed: expected resend of Enter key in log" >&2
+    exit 1
+  }
   echo "ok 5 - long/wrapped launch command submission succeeds"
 }
 
