@@ -188,7 +188,7 @@ Every Herdr invocation goes through `fm_backend_herdr_cli`, which sets the envir
 An environment variable alone is not reliable when another Herdr server is running.
 
 Literal text and Enter are separate operations for ordinary steers.
-Spawn-time fixed commands may use Herdr's atomic run primitive.
+Initial harness launch submission uses Herdr's atomic `pane run` primitive for its first attempt, then follows the shared bounded confirmation contract in [`configuration.md`](configuration.md#runtime-backend-configbackend--fm_backend).
 Enter, Escape, and Ctrl-C are supported.
 Slash and dollar-prefixed input uses the shared harness-aware settle before the first Enter so a completion popup cannot consume it.
 Text is typed once; only Enter is retried.

@@ -504,8 +504,8 @@ fm_backend_cmux_send_key() {  # <target> <key> [expected-label]
 # fm_backend_cmux_send_text_line: send one line of TEXT then submit. cmux has
 # no single-call atomic "run and submit" primitive (like herdr's `pane run`),
 # so this composes send (literal) + send-key enter, exactly like zellij's
-# equivalent - used for the fixed spawn-time commands (treehouse get, the
-# GOTMPDIR export).
+# equivalent. Used for fixed spawn-time commands; launch submission adds
+# shared bounded confirmation in fm_backend_launch_submit.
 fm_backend_cmux_send_text_line() {  # <target> <text> [expected-label]
   fm_backend_cmux_send_literal "$1" "$2" "${3:-}" || return 1
   fm_backend_cmux_send_key "$1" Enter "${3:-}"
