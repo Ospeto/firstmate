@@ -11,7 +11,7 @@
 #   6. Submitted command with output/echo before active prompt line.
 #   7. Capture failure handling (cap_rc != 0).
 #   8. Projected Herdr launch abort cleanup.
-#   9. Real Herdr lab session launch submission & recovery.
+#   9. Real Herdr lab session launch execution.
 set -u
 
 # shellcheck source=tests/lib.sh
@@ -83,6 +83,12 @@ case "\${1:-}" in
           case "\$mode" in
             swallowed_once)
               printf 'bash-5.2$ %s\n' "\$sent_text" > "\$state"
+              printf 'recovered\n' > "\$state.mode"
+              ;;
+            swallowed_wrapped_once)
+              printf 'bash-5.2$ %.20s\n%.20s\n%.20s\n%.20s\n%s\n' \
+                "\$sent_text" "\${sent_text:20:20}" "\${sent_text:40:20}" \
+                "\${sent_text:60:20}" "\${sent_text:80}" > "\$state"
               printf 'recovered\n' > "\$state.mode"
               ;;
             swallowed_always)
@@ -220,8 +226,8 @@ test_long_wrapped_launch_command() {
 
   local long_cmd="pi --mode crew --very-long-option-1=value1 --very-long-option-2=value2 --very-long-option-3=value3 -e /tmp/turnend"
 
-  # Start mode as swallowed_once to verify sig matching and recovery on long command
-  printf 'swallowed_once\n' > "$case_dir/tmux-state.mode"
+  # Start mode as swallowed_wrapped_once to verify sig matching and recovery on long command
+  printf 'swallowed_wrapped_once\n' > "$case_dir/tmux-state.mode"
 
   local rc=0
   FM_LAUNCH_SUBMIT_RETRIES=5 FM_LAUNCH_SUBMIT_SLEEP=0.01 \
@@ -365,7 +371,8 @@ test_herdr_lab_submit() {
     return 0
   fi
 
-  local res ses_ws seeded_tab task_res task_pane target cap
+  local res ses_ws seeded_tab task_res task_pane target cap process_info
+  local pane_ready=false ready_samples=0
   fm_backend_source herdr
   res=$(HERDR_SESSION="$lab_session" fm_backend_herdr_container_ensure "/tmp" "standalone")
   ses_ws="${res%%	*}"
@@ -375,11 +382,35 @@ test_herdr_lab_submit() {
   task_pane="${task_res#* }"
   target="$lab_session:$task_pane"
 
-  # Simulate typed-but-unsubmitted command in Herdr pane
-  HERDR_SESSION="$lab_session" fm_backend_herdr_send_literal "$target" "echo HERDR_LAB_TEST_SUCCESS"
+  for _ in $(seq 1 100); do
+    process_info=$(HERDR_SESSION="$lab_session" fm_backend_herdr_cli "$lab_session" pane process-info --pane "$task_pane" 2>/dev/null || true)
+    if printf '%s' "$process_info" | jq -e '
+      .result.process_info as $process
+      | ($process.foreground_processes | length == 1)
+        and ($process.foreground_processes[0].pid == $process.shell_pid)
+    ' >/dev/null 2>&1; then
+      ready_samples=$((ready_samples + 1))
+      if [ "$ready_samples" -ge 10 ]; then
+        pane_ready=true
+        break
+      fi
+    else
+      ready_samples=0
+    fi
+    sleep 0.1
+  done
+  if [ "$pane_ready" != true ]; then
+    echo "test 9 failed: Herdr pane shell did not become ready" >&2
+    exit 1
+  fi
+
+  local launch_cmd="printf 'HERDR_LAB_RESULT_%s\\n' EXECUTED;"
 
   # Submit and confirm via launch submit helper
-  HERDR_SESSION="$lab_session" fm_backend_launch_submit "herdr" "$target" "echo HERDR_LAB_TEST_SUCCESS" 5 0.3 "fm-test-task" >/dev/null 2>&1
+  if ! HERDR_SESSION="$lab_session" fm_backend_launch_submit "herdr" "$target" "$launch_cmd" 5 0.3 "fm-test-task" >/dev/null 2>&1; then
+    echo "test 9 failed: Herdr launch submit helper returned non-zero" >&2
+    exit 1
+  fi
 
   sleep 0.5
   cap=$(HERDR_SESSION="$lab_session" fm_backend_herdr_capture "$target" 10 "fm-test-task")
@@ -387,10 +418,10 @@ test_herdr_lab_submit() {
   "$lab_helper" teardown "$lab_session" >/dev/null 2>&1 || true
   trap - EXIT
 
-  if printf '%s\n' "$cap" | grep -Fq "HERDR_LAB_TEST_SUCCESS"; then
-    echo "ok 9 - real Herdr lab test typed-but-unsubmitted launch recovery"
+  if printf '%s\n' "$cap" | grep -Fq "HERDR_LAB_RESULT_EXECUTED"; then
+    echo "ok 9 - real Herdr lab launch execution"
   else
-    echo "test 9 failed: HERDR_LAB_TEST_SUCCESS not found in capture output" >&2
+    echo "test 9 failed: executed command output not found in capture" >&2
     exit 1
   fi
 }

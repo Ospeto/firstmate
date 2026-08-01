@@ -746,7 +746,7 @@ fm_backend_launch_submit() {  # <backend> <target> <launch_cmd> [retries] [enter
   local retries=${4:-${FM_LAUNCH_SUBMIT_RETRIES:-10}}
   local sleep_s=${5:-${FM_LAUNCH_SUBMIT_SLEEP:-0.3}}
   local expected_label=${6:-}
-  local i=0 capture sig unsubmitted last_lines cap_rc
+  local i=0 capture sig unsubmitted active_line cap_rc
 
   fm_backend_source "$backend" || return 1
 
@@ -759,8 +759,10 @@ fm_backend_launch_submit() {  # <backend> <target> <launch_cmd> [retries] [enter
     *) echo "error: no send-text-line implementation for backend '$backend'" >&2; return 1 ;;
   esac
 
-  sig=$(printf '%s' "$launch_cmd" | grep -v '^[[:space:]]*$' | head -n 1)
-  sig=${sig:0:40}
+  sig=$(printf '%s' "$launch_cmd" | grep -v '^[[:space:]]*$' | tail -n 1)
+  if [ "${#sig}" -gt 40 ]; then
+    sig=${sig: -40}
+  fi
 
   while :; do
     sleep "$sleep_s"
@@ -775,8 +777,8 @@ fm_backend_launch_submit() {  # <backend> <target> <launch_cmd> [retries] [enter
     if [ "$cap_rc" -ne 0 ] || [ -z "$capture" ]; then
       unsubmitted=1
     elif [ -n "$sig" ]; then
-      last_lines=$(printf '%s\n' "$capture" | grep -v '^[[:space:]]*$' | tail -n 3)
-      if [[ "$last_lines" == *"$sig"* ]]; then
+      active_line=$(printf '%s\n' "$capture" | grep -v '^[[:space:]]*$' | tail -n 1)
+      if [[ "$active_line" == *"$sig"* ]]; then
         unsubmitted=1
       fi
     fi
