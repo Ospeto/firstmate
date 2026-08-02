@@ -40,6 +40,7 @@ Choose that posture when adding or creating the project:
 
 - `no-mistakes` runs the full validation pipeline before a PR.
 - `direct-PR` pushes and opens a PR without the no-mistakes pipeline.
+- `no-mistakes` runs the full validation pipeline before a PR.
 - `local-only` has no required remote or PR and lands only through the approved local fast-forward path.
 - `no-mistakes-prod-only` is a conditional policy rather than one flat mode: genuinely internal-only tooling, automation, contributor or operator process, and release or submission work ships `direct-PR`, while product-facing, mixed, and uncertain work ships `no-mistakes`.
 
