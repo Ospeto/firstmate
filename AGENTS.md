@@ -284,9 +284,12 @@ Supervise all live work under section 8.
 ### Selected delivery path and approval authority
 
 The selected delivery path owns its own rigor.
-When no-mistakes is selected, no-mistakes alone owns review, fixes, tests, documentation, push, PR, and CI; otherwise follow the faster path without adding an independent reviewer.
-Never hold work outside no-mistakes for a manual clean verdict, stack serial manual reviews, or infer authority for one from security, architecture, or risk alone.
-A separate review or audit is allowed only when the captain explicitly requests that deliverable or the authorized task is a knowledge-only review; one named question remains scoped to that question.
+For every PR-based ship task, after the implementation commit and before raising a PR (for direct-PR) or starting `/no-mistakes` (for no-mistakes), the worker must launch `@oracle` to review the exact committed range, absorb its correctness and risk findings, and resolve actionable findings.
+This provides independent review evidence for the worker, not merge authority and not a replacement for the selected delivery path's own validation or the captain's merge decision.
+For direct-PR tasks, if `@oracle` is unavailable, the worker discloses the fallback and proceeds.
+For no-mistakes tasks, the worker runs `@oracle` before starting `/no-mistakes` and includes actionable findings or fallback disclosure in `--intent` before validation starts, so Oracle review does not create an unsanctioned manual clean-verdict gate outside the pipeline.
+Never hold work for an unsanctioned manual clean verdict, stack serial manual reviews, or infer merge authority for a reviewer from security, architecture, or risk alone.
+A separate review or audit, such as an explicit `@lelouch` post-PR review, is performed only when the captain explicitly requests that deliverable or the authorized task is a knowledge-only review; one named question remains scoped to that question.
 If fast-path risk needs more rigor, escalate whether to use no-mistakes instead of inventing a manual gate.
 The path's worker, automated gates, and captain approval remain authoritative:
 

@@ -375,6 +375,8 @@ test_faster_paths_use_configured_authority_without_stacked_review() {
     "direct-PR brief lost configured merge authority"
   assert_grep "Before pushing or requesting a PR, you must ask \`@oracle\` for a fresh read-only review of the complete committed range and verification evidence, using rule 10's exact base/HEAD commands." "$brief" \
     "direct-PR brief lost its mandatory exact-range Oracle review"
+  assert_grep "if \`@oracle\` is unavailable, disclose the fallback and proceed." "$brief" \
+    "direct-PR brief lost its unavailable Oracle fallback disclosure instruction"
   assert_no_grep "The captain reviews and merges the PR" "$brief" \
     "direct-PR brief hard-coded captain-only authority"
   id="brief-local-authority-a4"
@@ -413,6 +415,10 @@ test_no_mistakes_dod_wording() {
   # shellcheck disable=SC2016  # single quotes are deliberate: the backticks must stay literal
   assert_grep '`help`' "$brief" \
     "no-mistakes DOD must render literal backticks around help"
+  assert_grep "Before starting /no-mistakes, ask \`@oracle\` for a fresh read-only review of the complete committed range and verification evidence, using rule 10's exact base/HEAD commands." "$brief" \
+    "no-mistakes DOD must require exact-range Oracle review before starting /no-mistakes"
+  assert_grep "along with any actionable \`@oracle\` findings or fallback disclosure" "$brief" \
+    "no-mistakes DOD must require --intent to include actionable Oracle findings or fallback disclosure"
   assert_grep "make \`--intent\` preserve all relevant content from this brief" "$brief" \
     "no-mistakes DOD must require --intent to retain the accepted task contract"
   assert_grep "carrying only each requirement's current accepted form" "$brief" \
