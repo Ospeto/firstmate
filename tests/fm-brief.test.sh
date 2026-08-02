@@ -215,7 +215,7 @@ assert_review_path_rule() {
 }
 
 test_project_mode_defaults_and_rejects_malformed() {
-  local home out brief
+  local home out brief err
   home="$TMP_ROOT/project-mode-home"
   mkdir -p "$home/data"
   cat > "$home/data/projects.md" <<'EOF'
@@ -224,6 +224,7 @@ test_project_mode_defaults_and_rejects_malformed() {
 - malformed-proj [bogus +yolo] - malformed mode (added 2026-07-01)
 - malformed-yolo-proj [+yolo] - missing explicit mode (added 2026-07-01)
 - malformed-extra-proj [direct-PR +yolo unexpected] - malformed option (added 2026-07-01)
+- malformed-third-proj unexpected - malformed third token (added 2026-07-01)
 EOF
   out=$(FM_HOME="$home" "$ROOT/bin/fm-project-mode.sh" omitted-proj)
   [ "$out" = "direct-PR on" ] || fail "omitted delivery mode did not default to direct-PR on"
@@ -235,6 +236,11 @@ EOF
   [ "$out" = "no-mistakes off" ] || fail "malformed [+yolo] mode did not fall back to no-mistakes off"
   out=$(FM_HOME="$home" "$ROOT/bin/fm-project-mode.sh" malformed-extra-proj 2>/dev/null)
   [ "$out" = "no-mistakes off" ] || fail "malformed explicit option did not fall back to no-mistakes off"
+  err="$home/malformed-third.err"
+  out=$(FM_HOME="$home" "$ROOT/bin/fm-project-mode.sh" malformed-third-proj 2>"$err")
+  [ "$out" = "no-mistakes off" ] || fail "malformed third token did not fall back to no-mistakes off"
+  grep -F 'malformed mode' "$err" >/dev/null \
+    || fail "malformed third token did not emit a warning"
   FM_HOME="$home" "$ROOT/bin/fm-brief.sh" omitted-brief omitted-proj >/dev/null
   brief="$home/data/omitted-brief/brief.md"
   assert_grep "This project ships **direct-PR**" "$brief" \

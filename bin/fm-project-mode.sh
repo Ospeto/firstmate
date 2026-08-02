@@ -38,6 +38,7 @@ fi
 parsed=$(awk -v n="$NAME" '
   $1=="-" && $2==n {
     mode="direct-PR"; yolo="on";
+    if ($3 != "-" && $3 !~ /^\[/) { print "invalid"; exit }
     if ($3 ~ /^\[/) {
       s=""; closed=0;
       for (i=3; i<=NF; i++) {
