@@ -45,7 +45,7 @@ parsed=$(awk -v n="$NAME" '
         s = s (s==""?"":" ") $i;
         if ($i ~ /\]$/) { closed=1; break }
       }
-      if (!closed) { print "invalid"; exit }
+      if (!closed || i >= NF || $(i+1) != "-") { print "invalid"; exit }
       gsub(/^\[/, "", s); gsub(/\]$/, "", s);
       k = split(s, a, " "); valid=1;
       if (k < 1 || a[1] == "") valid=0;

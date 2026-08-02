@@ -189,12 +189,17 @@ EOF
 }
 
 assert_specialist_rule() {
-  local brief=$1 context=$2
+  local brief=$1 context=$2 expected_return
+  if [ "$context" = scout ]; then
+    expected_return="your findings and evidence"
+  else
+    expected_return="implementation, evidence, and any required PR"
+  fi
   assert_grep "Standard implementation uses one \`antigravity/gemini-3.6-flash\` crewmate at high effort unless Firstmate explicitly overrides dispatch." "$brief" \
     "$context brief missing standard crewmate dispatch"
   assert_grep "You own narrow supporting calls to installed specialists: use \`@fixer\` for targeted implementation, \`@explorer\` for repository mapping and search, \`@plan\` for architecture or implementation planning, \`@designer\` for frontend, UI, and visual work, and \`@oracle\` for independent correctness and risk review when authorized." "$brief" \
     "$context brief missing worker-owned specialist routing"
-  assert_grep "Inspect and incorporate returned findings yourself, then return implementation, evidence, and any required PR to Firstmate while preserving this brief's isolation, approval, and delivery rules." "$brief" \
+  assert_grep "Inspect and incorporate returned findings yourself, then return $expected_return to Firstmate while preserving this brief's isolation, approval, and delivery rules." "$brief" \
     "$context brief missing delegation boundary guidance"
   assert_no_grep "lelouch" "$brief" "$context brief must not add an automatic Lelouch review"
 }
@@ -225,6 +230,7 @@ test_project_mode_defaults_and_rejects_malformed() {
 - malformed-proj [bogus +yolo] - malformed mode (added 2026-07-01)
 - malformed-yolo-proj [+yolo] - missing explicit mode (added 2026-07-01)
 - malformed-extra-proj [direct-PR +yolo unexpected] - malformed option (added 2026-07-01)
+- malformed-trailing-proj [direct-PR +yolo] unexpected - malformed trailing token (added 2026-07-01)
 - malformed-third-proj unexpected - malformed third token (added 2026-07-01)
 EOF
   out=$(FM_HOME="$home" "$ROOT/bin/fm-project-mode.sh" omitted-proj)
@@ -237,6 +243,8 @@ EOF
   [ "$out" = "no-mistakes off" ] || fail "malformed [+yolo] mode did not fall back to no-mistakes off"
   out=$(FM_HOME="$home" "$ROOT/bin/fm-project-mode.sh" malformed-extra-proj 2>/dev/null)
   [ "$out" = "no-mistakes off" ] || fail "malformed explicit option did not fall back to no-mistakes off"
+  out=$(FM_HOME="$home" "$ROOT/bin/fm-project-mode.sh" malformed-trailing-proj 2>/dev/null)
+  [ "$out" = "no-mistakes off" ] || fail "malformed trailing token did not fall back to no-mistakes off"
   err="$home/malformed-third.err"
   out=$(FM_HOME="$home" "$ROOT/bin/fm-project-mode.sh" malformed-third-proj 2>"$err")
   [ "$out" = "no-mistakes off" ] || fail "malformed third token did not fall back to no-mistakes off"

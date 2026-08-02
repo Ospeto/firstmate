@@ -247,7 +247,12 @@ EOF
 HERDR_SECTION=${HERDR_SECTION%$'\n'}
 fi
 
-SPECIALIST_RULE="8. Standard implementation uses one \`antigravity/gemini-3.6-flash\` crewmate at high effort unless Firstmate explicitly overrides dispatch. You own narrow supporting calls to installed specialists: use \`@fixer\` for targeted implementation, \`@explorer\` for repository mapping and search, \`@plan\` for architecture or implementation planning, \`@designer\` for frontend, UI, and visual work, and \`@oracle\` for independent correctness and risk review when authorized. Inspect and incorporate returned findings yourself, then return implementation, evidence, and any required PR to Firstmate while preserving this brief's isolation, approval, and delivery rules."
+if [ "$KIND" = scout ]; then
+  SPECIALIST_RESULT="your findings and evidence"
+else
+  SPECIALIST_RESULT="implementation, evidence, and any required PR"
+fi
+SPECIALIST_RULE="8. Standard implementation uses one \`antigravity/gemini-3.6-flash\` crewmate at high effort unless Firstmate explicitly overrides dispatch. You own narrow supporting calls to installed specialists: use \`@fixer\` for targeted implementation, \`@explorer\` for repository mapping and search, \`@plan\` for architecture or implementation planning, \`@designer\` for frontend, UI, and visual work, and \`@oracle\` for independent correctness and risk review when authorized. Inspect and incorporate returned findings yourself, then return $SPECIALIST_RESULT to Firstmate while preserving this brief's isolation, approval, and delivery rules."
 WEB_RESEARCH_RULE="9. For web research, use Firecrawl MCP first: call \`firecrawl_search\`, call \`firecrawl_search_feedback\` after using its results, and use \`firecrawl_scrape\` for known pages. If Firecrawl is unavailable, use another tool only as a fallback and disclose that fallback in your findings."
 REVIEW_PATH_RULE="10. Before pre-commit review, record the base and HEAD SHAs, then have the reviewer inspect the exact committed range with \`git diff <base>...<HEAD>\` and use \`git show <base>..<HEAD>\` for commit details; if the review tool cannot access those commits or shows an empty range, report the mismatch instead of reviewing it."
 
