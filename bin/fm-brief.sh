@@ -247,7 +247,7 @@ EOF
 HERDR_SECTION=${HERDR_SECTION%$'\n'}
 fi
 
-SPECIALIST_RULE="8. When it would materially improve the result, delegate non-trivial supporting work narrowly to the appropriate installed specialist: use \`@explorer\` for repository mapping and search, \`@plan\` for architecture or implementation planning, \`@oracle\` for explicitly authorized independent correctness and risk review, and \`@designer\` for frontend, UI, and visual work. Inspect and incorporate returned findings yourself, while preserving this brief's isolation, approval, and delivery rules."
+SPECIALIST_RULE="8. Standard implementation uses one \`antigravity/gemini-3.6-flash\` crewmate at high effort unless Firstmate explicitly overrides dispatch. You own narrow supporting calls to installed specialists: use \`@fixer\` for targeted implementation, \`@explorer\` for repository mapping and search, \`@plan\` for architecture or implementation planning, \`@designer\` for frontend, UI, and visual work, and \`@oracle\` for independent correctness and risk review when authorized. Inspect and incorporate returned findings yourself, then return implementation, evidence, and any required PR to Firstmate while preserving this brief's isolation, approval, and delivery rules."
 WEB_RESEARCH_RULE="9. For web research, use Firecrawl MCP first: call \`firecrawl_search\`, call \`firecrawl_search_feedback\` after using its results, and use \`firecrawl_scrape\` for known pages. If Firecrawl is unavailable, use another tool only as a fallback and disclose that fallback in your findings."
 REVIEW_PATH_RULE="10. Before pre-commit review, record the base and HEAD SHAs, then have the reviewer inspect the exact committed range with \`git diff <base>...<HEAD>\` and use \`git show <base>..<HEAD>\` for commit details; if the review tool cannot access those commits or shows an empty range, report the mismatch instead of reviewing it."
 
@@ -317,8 +317,8 @@ case "$MODE" in
 # Definition of done
 This project ships **direct-PR**: you raise the PR yourself, without the no-mistakes pipeline.
 The task is complete only when committed on your branch.
-Before pushing or requesting a PR, if this task or the captain requires an independent review, ask \`@oracle\` for a fresh read-only review of the complete diff and verification evidence.
-Resolve every finding and rerun affected checks; if that review is required but \`@oracle\` is unavailable, append \`blocked: {why}\` and stop without requesting a PR.
+Before pushing or requesting a PR, you must ask \`@oracle\` for a fresh read-only review of the complete committed range and verification evidence, using rule 10's exact base/HEAD commands.
+Resolve every finding and rerun affected checks; if \`@oracle\` is unavailable, append \`blocked: {why}\` and stop without requesting a PR.
 When it is implemented, reviewed, and committed, push your branch and open a PR with \`gh-axi\`, then append \`done: PR {url}\` to the status file and stop.
 Do NOT run /no-mistakes. The configured merge authority decides whether to merge the PR; firstmate relays the outcome.
 EOF

@@ -190,12 +190,13 @@ EOF
 
 assert_specialist_rule() {
   local brief=$1 context=$2
-  assert_grep "When it would materially improve the result, delegate non-trivial supporting work narrowly to the appropriate installed specialist" "$brief" \
-    "$context brief missing specialist delegation rule"
-  assert_grep "use \`@explorer\` for repository mapping and search, \`@plan\` for architecture or implementation planning, \`@oracle\` for explicitly authorized independent correctness and risk review, and \`@designer\` for frontend, UI, and visual work." "$brief" \
-    "$context brief missing specialist selection guidance"
-  assert_grep "Inspect and incorporate returned findings yourself, while preserving this brief's isolation, approval, and delivery rules." "$brief" \
+  assert_grep "Standard implementation uses one \`antigravity/gemini-3.6-flash\` crewmate at high effort unless Firstmate explicitly overrides dispatch." "$brief" \
+    "$context brief missing standard crewmate dispatch"
+  assert_grep "You own narrow supporting calls to installed specialists: use \`@fixer\` for targeted implementation, \`@explorer\` for repository mapping and search, \`@plan\` for architecture or implementation planning, \`@designer\` for frontend, UI, and visual work, and \`@oracle\` for independent correctness and risk review when authorized." "$brief" \
+    "$context brief missing worker-owned specialist routing"
+  assert_grep "Inspect and incorporate returned findings yourself, then return implementation, evidence, and any required PR to Firstmate while preserving this brief's isolation, approval, and delivery rules." "$brief" \
     "$context brief missing delegation boundary guidance"
+  assert_no_grep "lelouch" "$brief" "$context brief must not add an automatic Lelouch review"
 }
 
 assert_web_research_rule() {
@@ -288,8 +289,8 @@ test_faster_paths_use_configured_authority_without_stacked_review() {
   brief="$home/data/$id/brief.md"
   assert_grep "The configured merge authority decides whether to merge the PR; firstmate relays the outcome." "$brief" \
     "direct-PR brief lost configured merge authority"
-  assert_grep "Before pushing or requesting a PR, if this task or the captain requires an independent review, ask \`@oracle\` for a fresh read-only review" "$brief" \
-    "direct-PR brief lost its Oracle review guidance"
+  assert_grep "Before pushing or requesting a PR, you must ask \`@oracle\` for a fresh read-only review of the complete committed range and verification evidence, using rule 10's exact base/HEAD commands." "$brief" \
+    "direct-PR brief lost its mandatory exact-range Oracle review"
   assert_no_grep "The captain reviews and merges the PR" "$brief" \
     "direct-PR brief hard-coded captain-only authority"
   id="brief-local-authority-a4"
