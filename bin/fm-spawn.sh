@@ -1042,61 +1042,30 @@ antigravity_preflight() {
     return 1
   }
 
-  if ! command -v perl >/dev/null 2>&1; then
-    echo "error: Antigravity quota preflight requires perl" >&2
+  local timer
+  if command -v timeout >/dev/null 2>&1; then
+    timer=timeout
+  elif command -v gtimeout >/dev/null 2>&1; then
+    timer=gtimeout
+  else
+    echo "error: Antigravity quota preflight requires timeout or gtimeout" >&2
     return 1
   fi
 
   tmp_out=$(mktemp "${STATE}/.preflight-${ID}.XXXXXXXX" 2>/dev/null || mktemp "/tmp/.preflight-${ID}.XXXXXXXX")
 
   set +e
-  perl -e '
-    my $t = shift; my $file = shift; my $limit = shift;
-    pipe(my $r, my $w) or die;
-    my $pid = fork; die "fork failed" unless defined $pid;
-    if (!$pid) {
-      close $r;
-      setpgrp(0, 0);
-      open(STDOUT, ">&", $w) or die;
-      open(STDERR, ">&", $w) or die;
-      close $w;
-      exec @ARGV;
-    }
-    close $w;
-    local $SIG{ALRM} = sub {
-      kill "TERM", -$pid;
-      select undef, undef, undef, 0.2;
-      kill "KILL", -$pid;
-      exit 124;
-    };
-    alarm $t;
-    open(my $out_fh, ">", $file) or die;
-    my $bytes_read = 0;
-    my $buf;
-    while (sysread($r, $buf, 4096)) {
-      if ($bytes_read < $limit) {
-        my $to_write = length($buf);
-        if ($bytes_read + $to_write > $limit) {
-          $to_write = $limit - $bytes_read;
-        }
-        syswrite($out_fh, substr($buf, 0, $to_write));
-        $bytes_read += $to_write;
-      }
-    }
-    close $out_fh;
-    close $r;
-    waitpid($pid, 0);
-    alarm 0;
-    my $sig = $? & 127;
-    my $rc = $sig ? 255 : ($? >> 8);
-    kill "TERM", -$pid;
-    select undef, undef, undef, 0.1;
-    kill "KILL", -$pid;
-    exit $rc;
-  ' "$timeout_seconds" "$tmp_out" "$output_bytes" "$checker" check >/dev/null 2>&1
+  "$timer" "$timeout_seconds" "$checker" check >"$tmp_out" 2>&1
   rc=$?
   set -e
+  if [ "$(wc -c <"$tmp_out")" -gt "$output_bytes" ]; then
+    head -c "$output_bytes" "$tmp_out" >"$tmp_out.truncated" && mv "$tmp_out.truncated" "$tmp_out"
+  fi
   rm -f "$tmp_out"
+
+  if [ "$rc" -ge 128 ] && [ "$rc" -le 255 ]; then
+    rc=255
+  fi
 
   case "$rc" in
     0) return 0 ;;
