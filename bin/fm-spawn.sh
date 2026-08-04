@@ -1,12 +1,27 @@
 #!/usr/bin/env bash
 # Spawn a direct report: a crewmate in a treehouse or Orca worktree, or a
 # secondmate in its isolated firstmate home.
-# Usage: fm-spawn.sh <task-id> <project-dir> [--harness <name>|harness|launch-command] [--model <name>] [--effort <level>] [--backend <name>] [--scout]
+# Usage: fm-spawn.sh <task-id> <project-dir> --mode <no-mistakes|direct-PR|local-only> --yolo <on|off> [--harness <name>|harness|launch-command] [--model <name>] [--effort <level>] [--backend <name>] [--resume]
+#        fm-spawn.sh <task-id> <project-dir> --scout [--harness <name>|harness|launch-command] [--model <name>] [--effort <level>] [--backend <name>] [--resume]
 #        fm-spawn.sh <task-id> [<firstmate-home>] [--harness <name>|harness|launch-command] [--model <name>] [--effort <level>] [--backend <name>] --secondmate
+#   --mode and --yolo are this task's delivery contract, REQUIRED for every ship
+#   spawn and refused on --scout and --secondmate spawns. Firstmate resolves both
+#   per task at intake (AGENTS.md section 7); data/projects.md holds the captain's
+#   standing posture as context, not as this task's answer, so a spawn never looks
+#   the mode up. A ship spawn additionally reads the brief's recorded
+#   "Delivery contract: mode=<mode>" line and REFUSES a mismatch, so the worker's
+#   instructions and the recorded task delivery cannot drift apart; a brief
+#   scaffolded before that line existed warns once and launches on the flag. When
+#   the explicit mode carries less rigor than the project's standing posture, a
+#   loud one-line deviation notice is printed and the spawn continues.
+#   no-mistakes-prod-only is a registry policy rather than a task mode and is
+#   refused as a flag value.
+#        --resume reuses the recorded task worktree and branch after endpoint loss; it never allocates a replacement worktree.
 #   --harness <name> is the explicit per-spawn harness/profile adapter. The old
 #   positional harness arg still works for back-compat.
 #   --model <name> and --effort <low|medium|high|xhigh|max> are concrete profile
-#   axes chosen by firstmate at intake. They are only threaded into harnesses whose
+#   axes chosen by firstmate at intake. On --resume, omitted axes reuse the recorded
+#   actual profile and explicit axes replace them after the same quota preflight. They are only threaded into harnesses whose
 #   installed CLIs were verified to support that axis; unsupported axes are omitted
 #   from that harness's launch rather than guessed.
 #   --backend <name> is the explicit runtime session-provider backend for this
@@ -196,6 +211,10 @@ HARNESS_ARG=
 MODEL=
 EFFORT=
 BACKEND_ARG=
+MODE=
+YOLO=
+TRACEPARENT_ARG=
+RESUME=0
 HARNESS_SET=0
 MODEL_SET=0
 EFFORT_SET=0
@@ -228,6 +247,13 @@ for a in "$@"; do
     --effort=*) EFFORT=${a#--effort=}; EFFORT_SET=1 ;;
     --backend) want_value=backend ;;
     --backend=*) BACKEND_ARG=${a#--backend=}; BACKEND_SET=1 ;;
+    --mode) want_value=mode ;;
+    --mode=*) MODE=${a#--mode=}; MODE_SET=1 ;;
+    --yolo) want_value=yolo ;;
+    --yolo=*) YOLO=${a#--yolo=}; YOLO_SET=1 ;;
+    --traceparent) want_value=traceparent ;;
+    --traceparent=*) TRACEPARENT_ARG=${a#--traceparent=}; TRACEPARENT_SET=1 ;;
+    --resume) RESUME=1 ;;
     *) POS+=("$a") ;;
   esac
 done
@@ -264,6 +290,7 @@ if [ "$BACKEND" = cmux ] && [ "$KIND" = secondmate ]; then
   exit 1
 fi
 if [ "$BACKEND" = orca ]; then
+  [ "$RESUME" -eq 0 ] || { echo "error: --resume cannot reuse a recorded worktree with backend=orca" >&2; exit 1; }
   fm_backend_orca_runtime_check || exit 1
 fi
 ORCA_ABORT_CLEANUP=0
@@ -401,6 +428,7 @@ if [ "${#POS[@]}" -gt 0 ] && [ "${POS[0]}" != "$idpart" ] && case "$idpart" in *
   [ -z "$HARNESS_ARG" ] || shared_args+=(--harness "$HARNESS_ARG")
   [ -z "$MODEL" ] || shared_args+=(--model "$MODEL")
   [ -z "$EFFORT" ] || shared_args+=(--effort "$EFFORT")
+  [ "$RESUME" -eq 0 ] || shared_args+=(--resume)
   [ -z "$BACKEND_ARG" ] || shared_args+=(--backend "$BACKEND_ARG")
   for pair in "${POS[@]}"; do
     case "$pair" in
@@ -427,6 +455,50 @@ if ! fm_lock_try_acquire "$SPAWN_TASK_LOCK"; then
   exit 1
 fi
 SPAWN_TASK_LOCK_HELD=1
+RESUME_META="$STATE/$ID.meta"
+RESUME_PROJECT=
+RESUME_WORKTREE=
+if [ "$RESUME" -eq 1 ]; then
+  [ "$KIND" != secondmate ] || { echo "error: --resume is only supported for crewmate and scout tasks" >&2; exit 1; }
+  [ -f "$RESUME_META" ] && [ ! -L "$RESUME_META" ] || {
+    echo "error: --resume requires recorded task metadata at $RESUME_META" >&2
+    exit 1
+  }
+  RESUME_PROJECT=$(grep '^project=' "$RESUME_META" | tail -1 | cut -d= -f2- || true)
+  RESUME_WORKTREE=$(grep '^worktree=' "$RESUME_META" | tail -1 | cut -d= -f2- || true)
+  [ -n "$RESUME_PROJECT" ] && [ -n "$RESUME_WORKTREE" ] || {
+    echo "error: --resume requires recorded project= and worktree=" >&2
+    exit 1
+  }
+  if [ ! -d "$RESUME_WORKTREE" ] || [ ! -d "$RESUME_PROJECT" ]; then
+    echo "error: --resume recorded project or worktree is unavailable" >&2
+    exit 1
+  fi
+  old_target=$(fm_backend_target_of_meta "$RESUME_META" 2>/dev/null || true)
+  if [ -n "$old_target" ]; then
+    old_backend=$(fm_backend_of_meta "$RESUME_META")
+    old_state=$(fm_backend_agent_alive "$old_backend" "$old_target")
+    case "$old_state" in
+      alive|unknown)
+        echo "error: --resume refused while recorded task endpoint is $old_state" >&2
+        exit 1
+        ;;
+    esac
+  fi
+  if [ "$HARNESS_SET" -eq 0 ]; then
+    HARNESS_ARG=$(grep '^harness=' "$RESUME_META" | tail -1 | cut -d= -f2- || true)
+    [ -n "$HARNESS_ARG" ] && HARNESS_SET=1
+  fi
+  if [ "$MODEL_SET" -eq 0 ]; then
+    MODEL=$(grep '^model=' "$RESUME_META" | tail -1 | cut -d= -f2- || true)
+  fi
+  if [ "$EFFORT_SET" -eq 0 ]; then
+    EFFORT=$(grep '^thinking=' "$RESUME_META" | tail -1 | cut -d= -f2- || true)
+    [ -n "$EFFORT" ] || EFFORT=$(grep '^effort=' "$RESUME_META" | tail -1 | cut -d= -f2- || true)
+  fi
+  MODEL=${MODEL:-default}
+  EFFORT=${EFFORT:-default}
+fi
 PROJ=
 ARG3=
 FIRSTMATE_HOME=
@@ -451,8 +523,13 @@ if [ "$KIND" = secondmate ]; then
       ;;
   esac
 else
-  PROJ=${POS[1]}
-  ARG3=${POS[2]:-}
+  if [ "$RESUME" -eq 1 ]; then
+    PROJ=$RESUME_PROJECT
+    ARG3=${POS[2]:-}
+  else
+    PROJ=${POS[1]}
+    ARG3=${POS[2]:-}
+  fi
 fi
 [ -z "$HARNESS_ARG" ] || ARG3=$HARNESS_ARG
 
@@ -1000,8 +1077,19 @@ if [ "$KIND" = secondmate ]; then
     BRIEF="$DATA/$ID/brief.md"
   fi
 else
-  PROJ_ABS="$(cd "$(resolve_project_dir_arg "$PROJ")" && pwd)"
-  WT=""
+  if [ "$RESUME" -eq 1 ]; then
+    PROJ_ABS=$RESUME_PROJECT
+    WT=$RESUME_WORKTREE
+    resume_project_top=$(git -C "$WT" rev-parse --show-toplevel 2>/dev/null || true)
+    resume_project_top=$(cd "$resume_project_top" 2>/dev/null && pwd -P || true)
+    [ -n "$resume_project_top" ] && [ "$resume_project_top" != "$PROJ_ABS" ] || {
+      echo "error: --resume recorded worktree is not isolated from its project" >&2
+      exit 1
+    }
+  else
+    PROJ_ABS="$(cd "$(resolve_project_dir_arg "$PROJ")" && pwd)"
+    WT=""
+  fi
   BRIEF="$DATA/$ID/brief.md"
 fi
 [ -f "$BRIEF" ] || { echo "error: no brief at $BRIEF" >&2; exit 1; }
@@ -1453,7 +1541,31 @@ kimi_spawn_fail() {  # <detail>
 }
 
 if [ "$KIND" != secondmate ] && [ "$BACKEND" != orca ]; then
-  spawn_send_text_line "$WT_TARGET" 'treehouse get'
+  if [ "$RESUME" -eq 1 ]; then
+    # Recovery keeps the recorded linked worktree; only move the new endpoint
+    # into it. No treehouse allocation is allowed on this path.
+    spawn_send_text_line "$WT_TARGET" "cd -- $(shell_quote "$WT")"
+    resume_wt_real=$(real_path_or_raw "$WT")
+    resume_candidate=
+    for _ in $(seq 1 60); do
+      p=$(spawn_current_path "$WT_TARGET" || true)
+      if [ -n "$p" ] && [ "$(real_path_or_raw "$p")" = "$resume_wt_real" ]; then
+        if [ "$resume_candidate" = "$resume_wt_real" ]; then
+          break
+        fi
+        resume_candidate=$resume_wt_real
+      else
+        resume_candidate=
+      fi
+      sleep 1
+    done
+    [ "$resume_candidate" = "$resume_wt_real" ] || {
+      echo "error: recorded resume worktree was not reached; inspect endpoint $T" >&2
+      exit 1
+    }
+    validate_spawn_worktree "recorded resume worktree" "$T"
+  else
+    spawn_send_text_line "$WT_TARGET" 'treehouse get'
 
   # Wait for the treehouse subshell: the pane's cwd moves from the project to the worktree.
   # Target the stable window id, not the name: if the name is ever lost (e.g. an
@@ -1500,6 +1612,7 @@ if [ "$KIND" != secondmate ] && [ "$BACKEND" != orca ]; then
   fi
 
   validate_spawn_worktree "treehouse get" "$T"
+  fi
 fi
 
 # Per-task temp root: /tmp/fm-<id>/ with Go's build temp nested at gotmp/. Go won't
@@ -1774,6 +1887,11 @@ META_WINDOW=$T
   echo "tasktmp=$TASK_TMP"
   echo "model=${MODEL:-default}"
   echo "effort=${EFFORT:-default}"
+  if [ "$RESUME" -eq 1 ]; then
+    echo "thinking=${EFFORT:-default}"
+    echo "resume=1"
+    echo "branch=$(git -C "$WT" symbolic-ref --quiet --short HEAD 2>/dev/null || echo detached)"
+  fi
   [ -z "${BUSY_GEN:-}" ] || echo "busy_gen=$BUSY_GEN"
   # backend= is written only for a non-default (non-tmux) backend, so the
   # default path's meta stays byte-identical (absent backend= means tmux;

@@ -42,7 +42,14 @@ esac
 exit 0
 SH
   chmod +x "$fakebin/tmux"
-  fm_fake_exit0 "$fakebin" treehouse pi-signed
+  cat > "$fakebin/treehouse" <<'SH'
+#!/usr/bin/env bash
+set -u
+[ -z "${FM_FAKE_TREEHOUSE_LOG:-}" ] || printf '%s\n' "$*" >> "$FM_FAKE_TREEHOUSE_LOG"
+exit 0
+SH
+  chmod +x "$fakebin/treehouse"
+  fm_fake_exit0 "$fakebin" pi-signed
   printf '%s\n' "$fakebin"
 }
 
@@ -99,7 +106,7 @@ run_spawn() {
     FM_PROJECTS_OVERRIDE="$home/projects" FM_CONFIG_OVERRIDE="$home/config" \
     FM_SPAWN_NO_GUARD=1 FM_FAKE_PANE_PATH="$wt" TMUX="fake,1,0" \
     CLAUDE_CONFIG_DIR="${FM_TEST_CLAUDE_CONFIG_DIR:-}" \
-    FM_FAKE_LAUNCH_LOG="$launchlog" \
+    FM_FAKE_LAUNCH_LOG="$launchlog" FM_FAKE_TREEHOUSE_LOG="$launchlog.treehouse" \
     FM_ANTIGRAVITY_PREFLIGHT_BIN="${PREFLIGHT_BIN:-}" \
     FM_ANTIGRAVITY_PREFLIGHT_TIMEOUT_SECONDS="${PREFLIGHT_TIMEOUT:-30}" \
     FM_PREFLIGHT_LOG="${PREFLIGHT_LOG:-}" FM_PREFLIGHT_RESULT="${PREFLIGHT_RESULT:-ok}" \
@@ -1088,6 +1095,44 @@ test_antigravity_preflight_quoted_embedded_raw_launch_model_uses_fallback() {
   pass "single-quoted raw launch model and effort flags are parsed and cleanly replaced on fallback"
 }
 
+test_resume_reuses_recorded_worktree_and_profile() {
+  local rec id out status old_head meta
+  id=resume-existing-z33
+  rec=$(make_spawn_case resume-existing pi "$id")
+  read_case_record "$rec"
+  printf 'committed before resume\n' > "$WT_DIR/resume-committed.txt"
+  git -C "$WT_DIR" add resume-committed.txt
+  git -C "$WT_DIR" -c user.name='Firstmate Test' -c user.email='firstmate@example.invalid' commit -qm 'resume fixture commit'
+  old_head=$(git -C "$WT_DIR" rev-parse HEAD)
+  printf 'uncommitted before resume\n' > "$WT_DIR/resume-uncommitted.txt"
+  meta="$HOME_DIR/state/$id.meta"
+  {
+    printf 'worktree=%s\n' "$WT_DIR"
+    printf 'project=%s\n' "$PROJ_DIR"
+    printf 'harness=pi\n'
+    printf 'kind=ship\n'
+    printf 'model=antigravity/gemini-3.6-flash\n'
+    printf 'effort=high\n'
+  } > "$meta"
+
+  out=$(run_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "$id" "$PROJ_DIR" \
+    --resume --model cockpit/gpt-5.6-luna --effort xhigh)
+  status=$?
+  expect_code 0 "$status" "resume should relaunch from the recorded worktree"
+  assert_contains "$out" "spawned $id harness=pi" "resume did not report the recorded harness"
+  [ "$(git -C "$WT_DIR" rev-parse HEAD)" = "$old_head" ] \
+    || fail "resume changed the recorded branch head"
+  assert_present "$WT_DIR/resume-uncommitted.txt" "resume discarded an uncommitted change"
+  assert_grep "worktree=$WT_DIR" "$meta" "resume metadata lost the recorded worktree"
+  assert_grep "model=cockpit/gpt-5.6-luna" "$meta" "resume metadata lost the actual resumed model"
+  assert_grep "effort=xhigh" "$meta" "resume metadata lost the actual resumed effort"
+  assert_grep "thinking=xhigh" "$meta" "resume metadata lost the actual resumed thinking level"
+  assert_grep "resume=1" "$meta" "resume metadata did not record same-branch recovery"
+  assert_grep "branch=wt-resume-existing" "$meta" "resume metadata did not record the resumed branch"
+  assert_absent "$LAUNCH_LOG.treehouse" "resume allocated a replacement treehouse worktree"
+  pass "--resume preserves commits and uncommitted changes while recording the actual profile"
+}
+
 test_antigravity_preflight_signal_killed_checker_refuses() {
   local rec id out status
   id=preflight-sigkill-z32
@@ -1149,6 +1194,7 @@ test_antigravity_preflight_uses_secondary_fallback_checker_path
 test_antigravity_preflight_embedded_raw_launch_model_uses_fallback
 test_antigravity_preflight_large_output_does_not_fail
 test_antigravity_preflight_space_in_home_path_succeeds
+test_resume_reuses_recorded_worktree_and_profile
 test_antigravity_preflight_quoted_embedded_raw_launch_model_uses_fallback
 test_antigravity_preflight_signal_killed_checker_refuses
 
