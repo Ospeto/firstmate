@@ -747,7 +747,7 @@ test_antigravity_preflight_exit_zero_preserves_profile() {
   PREFLIGHT_RESULT=ok
   make_preflight_checker "$PREFLIGHT_BIN"
 
-  out=$(run_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "$id" "$PROJ_DIR" \
+  out=$(run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "$id" "$PROJ_DIR" \
     --model antigravity/gemini-3.6-flash --effort high)
   status=$?
   expect_code 0 "$status" "usable Antigravity quota should permit the spawn"
@@ -787,7 +787,7 @@ test_antigravity_preflight_all_unusable_falls_back_before_metadata() {
   PREFLIGHT_RESULT=exhausted
   make_preflight_checker "$PREFLIGHT_BIN"
 
-  out=$(run_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "$id" "$PROJ_DIR" \
+  out=$(run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "$id" "$PROJ_DIR" \
     --model antigravity/gemini-3.6-flash --effort xhigh)
   status=$?
   expect_code 0 "$status" "exhausted Antigravity accounts should fall back to Luna high"
@@ -809,7 +809,7 @@ test_antigravity_preflight_raw_launch_uses_fallback() {
   PREFLIGHT_RESULT=exhausted
   make_preflight_checker "$PREFLIGHT_BIN"
 
-  out=$(run_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "$id" "$PROJ_DIR" \
+  out=$(run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "$id" "$PROJ_DIR" \
     "custom-agent --flag" --model antigravity/gemini-3.6-flash --effort xhigh)
   status=$?
   expect_code 0 "$status" "raw launch should use the documented Luna fallback"
@@ -830,7 +830,7 @@ test_antigravity_preflight_error_is_secret_safe_and_refuses() {
   PREFLIGHT_RESULT=secret-error
   make_preflight_checker "$PREFLIGHT_BIN"
 
-  out=$(run_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "$id" "$PROJ_DIR" \
+  out=$(run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "$id" "$PROJ_DIR" \
     --model antigravity/gemini-3.6-flash --effort high)
   status=$?
   expect_code 1 "$status" "checker error exit code must refuse Antigravity launch"
@@ -847,7 +847,7 @@ test_antigravity_preflight_missing_and_non_executable_refuse() {
   read_case_record "$rec"
   PREFLIGHT_BIN="$CASE_DIR/missing-checker"
 
-  out=$(run_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "$id" "$PROJ_DIR" \
+  out=$(run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "$id" "$PROJ_DIR" \
     --model antigravity/gemini-3.6-flash --effort high)
   status=$?
   expect_code 1 "$status" "missing checker must refuse Antigravity launch"
@@ -856,7 +856,7 @@ test_antigravity_preflight_missing_and_non_executable_refuse() {
 
   touch "$PREFLIGHT_BIN"
   chmod -x "$PREFLIGHT_BIN"
-  out=$(run_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "$id" "$PROJ_DIR" \
+  out=$(run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "$id" "$PROJ_DIR" \
     --model antigravity/gemini-3.6-flash --effort high)
   status=$?
   expect_code 1 "$status" "non-executable checker must refuse Antigravity launch"
@@ -876,7 +876,7 @@ test_antigravity_preflight_timeout_refuses() {
   make_preflight_checker "$PREFLIGHT_BIN"
 
   out=$(PREFLIGHT_TIMEOUT=1 \
-    run_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "$id" "$PROJ_DIR" \
+    run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "$id" "$PROJ_DIR" \
     --model antigravity/gemini-3.6-flash --effort high)
   status=$?
   expect_code 1 "$status" "preflight timeout must refuse Antigravity launch"
@@ -894,7 +894,7 @@ test_antigravity_preflight_skips_non_antigravity_models() {
   PREFLIGHT_LOG="$CASE_DIR/checker.log"
   PREFLIGHT_RESULT=ok
 
-  out=$(run_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "$id" "$PROJ_DIR" \
+  out=$(run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "$id" "$PROJ_DIR" \
     --model cockpit/gpt-5.6-luna --effort high)
   status=$?
   expect_code 0 "$status" "Luna must not require Antigravity preflight"
@@ -934,7 +934,7 @@ test_antigravity_preflight_forked_checker_does_not_hang() {
   PREFLIGHT_LOG="$CASE_DIR/checker.log"
   make_forked_preflight_checker "$PREFLIGHT_BIN"
 
-  out=$(run_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "$id" "$PROJ_DIR" \
+  out=$(run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "$id" "$PROJ_DIR" \
     --model antigravity/gemini-3.6-flash --effort high)
   status=$?
   expect_code 0 "$status" "forked checker should return promptly and permit spawn"
@@ -954,7 +954,7 @@ test_antigravity_preflight_invalid_limits_refuse() {
   make_preflight_checker "$PREFLIGHT_BIN"
 
   out=$(PREFLIGHT_TIMEOUT=invalid \
-    run_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "$id" "$PROJ_DIR" \
+    run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "$id" "$PROJ_DIR" \
     --model antigravity/gemini-3.6-flash --effort high)
   status=$?
   expect_code 1 "$status" "non-integer timeout must refuse spawn"
@@ -962,7 +962,7 @@ test_antigravity_preflight_invalid_limits_refuse() {
   assert_absent "$HOME_DIR/state/$id.meta" "invalid timeout written metadata"
 
   out=$(FM_ANTIGRAVITY_PREFLIGHT_OUTPUT_BYTES=0 \
-    run_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "$id" "$PROJ_DIR" \
+    run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "$id" "$PROJ_DIR" \
     --model antigravity/gemini-3.6-flash --effort high)
   status=$?
   expect_code 1 "$status" "zero output limit must refuse spawn"
@@ -984,7 +984,7 @@ test_antigravity_preflight_uses_default_checker_path() {
   make_preflight_checker "$checker_path"
 
   out=$(PI_CODING_AGENT_DIR="$agent_dir" PREFLIGHT_BIN="" \
-    run_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "$id" "$PROJ_DIR" \
+    run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "$id" "$PROJ_DIR" \
     --model antigravity/gemini-3.6-flash --effort high)
   status=$?
   expect_code 0 "$status" "default checker path under PI_CODING_AGENT_DIR should succeed"
@@ -1006,7 +1006,7 @@ test_antigravity_preflight_uses_secondary_fallback_checker_path() {
   make_preflight_checker "$secondary_checker_path"
 
   out=$(PI_CODING_AGENT_DIR="$agent_dir" PREFLIGHT_BIN="" \
-    run_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "$id" "$PROJ_DIR" \
+    run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "$id" "$PROJ_DIR" \
     --model antigravity/gemini-3.6-flash --effort high)
   status=$?
   expect_code 0 "$status" "secondary checker path under PI_CODING_AGENT_DIR should succeed when primary is missing"
@@ -1025,7 +1025,7 @@ test_antigravity_preflight_embedded_raw_launch_model_uses_fallback() {
   PREFLIGHT_RESULT=exhausted
   make_preflight_checker "$PREFLIGHT_BIN"
 
-  out=$(run_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "$id" "$PROJ_DIR" \
+  out=$(run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "$id" "$PROJ_DIR" \
     "custom-agent --model=antigravity/gemini-3.6-flash --effort xhigh")
   status=$?
   expect_code 0 "$status" "raw launch with embedded antigravity model flag should trigger preflight fallback"
@@ -1046,7 +1046,7 @@ test_antigravity_preflight_large_output_does_not_fail() {
   PREFLIGHT_LOG="$CASE_DIR/checker.log"
   make_large_preflight_checker "$PREFLIGHT_BIN" ok
 
-  out=$(run_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "$id" "$PROJ_DIR" \
+  out=$(run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "$id" "$PROJ_DIR" \
     --model antigravity/gemini-3.6-flash --effort high)
   status=$?
   expect_code 0 "$status" "checker writing large output with exit 0 should succeed"
@@ -1069,7 +1069,7 @@ test_antigravity_preflight_space_in_home_path_succeeds() {
   PREFLIGHT_RESULT=ok
   make_preflight_checker "$PREFLIGHT_BIN"
 
-  out=$(run_spawn "$home_space" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "$id" "$PROJ_DIR" \
+  out=$(run_ship_spawn "$home_space" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "$id" "$PROJ_DIR" \
     --model antigravity/gemini-3.6-flash --effort high)
   status=$?
   expect_code 0 "$status" "preflight with space in home path should succeed"
@@ -1087,7 +1087,7 @@ test_antigravity_preflight_quoted_embedded_raw_launch_model_uses_fallback() {
   PREFLIGHT_RESULT=exhausted
   make_preflight_checker "$PREFLIGHT_BIN"
 
-  out=$(run_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "$id" "$PROJ_DIR" \
+  out=$(run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "$id" "$PROJ_DIR" \
     "custom-agent --model 'antigravity/gemini-3.6-flash' --effort xhigh")
   status=$?
   expect_code 0 "$status" "raw launch with single-quoted antigravity model should trigger fallback and replace flag"
@@ -1122,7 +1122,7 @@ test_resume_reuses_recorded_worktree_and_profile() {
     printf 'effort=high\n'
   } > "$meta"
 
-  out=$(run_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "$id" "$PROJ_DIR" \
+  out=$(run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "$id" "$PROJ_DIR" \
     --resume --model cockpit/gpt-5.6-luna --effort xhigh)
   status=$?
   expect_code 0 "$status" "resume should relaunch from the recorded worktree"
@@ -1150,7 +1150,7 @@ test_antigravity_preflight_signal_killed_checker_refuses() {
   PREFLIGHT_RESULT=signal-kill
   make_preflight_checker "$PREFLIGHT_BIN"
 
-  out=$(run_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "$id" "$PROJ_DIR" \
+  out=$(run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "$id" "$PROJ_DIR" \
     --model antigravity/gemini-3.6-flash --effort high)
   status=$?
   expect_code 1 "$status" "signal-killed checker must refuse Antigravity launch"
