@@ -1055,6 +1055,7 @@ test_antigravity_preflight_space_in_home_path_succeeds() {
   read_case_record "$rec"
   home_space="$CASE_DIR/home with spaces"
   mkdir -p "$home_space/data/$id" "$home_space/projects" "$home_space/state" "$home_space/config"
+  printf '%s\n' pi > "$home_space/config/crew-harness"
   touch "$home_space/state/.last-watcher-beat"
   printf 'brief for %s\n' "$id" > "$home_space/data/$id/brief.md"
   PREFLIGHT_BIN="$CASE_DIR/checker"
