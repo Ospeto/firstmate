@@ -706,12 +706,17 @@ antigravity_preflight() {
     return 1
   }
 
-  local timer
-  if command -v timeout >/dev/null 2>&1; then
-    timer=timeout
-  elif command -v gtimeout >/dev/null 2>&1; then
-    timer=gtimeout
-  else
+  local timer='' timer_kill_after=0 candidate candidate_path
+  for candidate in timeout gtimeout; do
+    candidate_path=$(command -v "$candidate" 2>/dev/null) || continue
+    [ -n "$timer" ] || timer=$candidate_path
+    if "$candidate_path" --help 2>&1 | grep -q -- '--kill-after'; then
+      timer=$candidate_path
+      timer_kill_after=1
+      break
+    fi
+  done
+  if [ -z "$timer" ]; then
     echo "error: Antigravity quota preflight requires timeout or gtimeout" >&2
     return 1
   fi
@@ -719,11 +724,19 @@ antigravity_preflight() {
   tmp_out=$(mktemp "${STATE}/.preflight-${ID}.XXXXXXXX" 2>/dev/null || mktemp "/tmp/.preflight-${ID}.XXXXXXXX")
 
   set +e
-  "$timer" --kill-after=1 "$timeout_seconds" "$checker" check 2>&1 |
-    {
-      dd bs=1 count="$output_bytes" 2>/dev/null
-      cat >/dev/null
-    } >"$tmp_out"
+  if [ "$timer_kill_after" -eq 1 ]; then
+    "$timer" --kill-after=1 "$timeout_seconds" "$checker" check 2>&1 |
+      {
+        dd bs=1 count="$output_bytes" 2>/dev/null
+        cat >/dev/null
+      } >"$tmp_out"
+  else
+    "$timer" "$timeout_seconds" "$checker" check 2>&1 |
+      {
+        dd bs=1 count="$output_bytes" 2>/dev/null
+        cat >/dev/null
+      } >"$tmp_out"
+  fi
   rc=${PIPESTATUS[0]}
   set -e
   rm -f "$tmp_out"
