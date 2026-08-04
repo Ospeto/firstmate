@@ -71,7 +71,7 @@ parsed=$(awk -v n="$NAME" '
       gsub(/^\[/, "", s); gsub(/\]$/, "", s);
       k = split(s, a, " "); valid=1;
       if (k < 1 || a[1] == "") valid=0;
-      if (a[1] !~ /^(no-mistakes|direct-PR|local-only)$/) valid=0;
+      if (a[1] !~ /^(no-mistakes|direct-PR|local-only|no-mistakes-prod-only)$/) valid=0;
       else mode=a[1];
       yolo="off";
       for (j=2; j<=k; j++) {

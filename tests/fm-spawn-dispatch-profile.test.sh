@@ -932,6 +932,7 @@ test_antigravity_preflight_forked_checker_does_not_hang() {
   read_case_record "$rec"
   PREFLIGHT_BIN="$CASE_DIR/checker"
   PREFLIGHT_LOG="$CASE_DIR/checker.log"
+  PREFLIGHT_TIMEOUT=5
   make_forked_preflight_checker "$PREFLIGHT_BIN"
 
   out=$(run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "$id" "$PROJ_DIR" \
