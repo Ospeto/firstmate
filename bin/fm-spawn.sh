@@ -719,12 +719,13 @@ antigravity_preflight() {
   tmp_out=$(mktemp "${STATE}/.preflight-${ID}.XXXXXXXX" 2>/dev/null || mktemp "/tmp/.preflight-${ID}.XXXXXXXX")
 
   set +e
-  "$timer" "$timeout_seconds" "$checker" check >"$tmp_out" 2>&1
-  rc=$?
+  "$timer" --kill-after=1 "$timeout_seconds" "$checker" check 2>&1 |
+    {
+      dd bs=1 count="$output_bytes" 2>/dev/null
+      cat >/dev/null
+    } >"$tmp_out"
+  rc=${PIPESTATUS[0]}
   set -e
-  if [ "$(wc -c <"$tmp_out")" -gt "$output_bytes" ]; then
-    head -c "$output_bytes" "$tmp_out" >"$tmp_out.truncated" && mv "$tmp_out.truncated" "$tmp_out"
-  fi
   rm -f "$tmp_out"
 
   if [ "$rc" -ge 128 ] && [ "$rc" -le 255 ]; then
