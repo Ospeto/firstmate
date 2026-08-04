@@ -169,6 +169,35 @@ SH
   chmod +x "$fakebin/perl"
 }
 
+make_incompatible_timeout_with_gtimeout() {
+  local fakebin=$1 timeout_marker=$2 gtimeout_marker=$3 perl_marker=$4 native_timeout
+  native_timeout=$(command -v timeout || command -v gtimeout) || fail "native timeout command is unavailable"
+  cat > "$fakebin/timeout" <<SH
+#!/usr/bin/env bash
+case "\${1:-}" in
+  --help) printf '%s\\n' 'portable timeout'; exit 0 ;;
+esac
+printf '%s\\n' called > '$timeout_marker'
+exit 127
+SH
+  chmod +x "$fakebin/timeout"
+  cat > "$fakebin/gtimeout" <<SH
+#!/usr/bin/env bash
+case "\${1:-}" in
+  --help) printf '%s\\n' '--kill-after=DURATION'; exit 0 ;;
+esac
+printf '%s\\n' called > '$gtimeout_marker'
+exec '$native_timeout' "\$@"
+SH
+  chmod +x "$fakebin/gtimeout"
+  cat > "$fakebin/perl" <<SH
+#!/usr/bin/env bash
+printf '%s\\n' called > '$perl_marker'
+exit 127
+SH
+  chmod +x "$fakebin/perl"
+}
+
 make_large_preflight_checker() {
   local path=$1 result=${2:-ok}
   cat > "$path" <<SH
@@ -795,6 +824,30 @@ test_antigravity_preflight_without_perl_uses_native_timeout() {
   pass "native timeout path removes Perl as a required Antigravity dependency"
 }
 
+test_antigravity_preflight_prefers_compatible_gtimeout() {
+  local rec id out status timeout_marker gtimeout_marker perl_marker
+  id=preflight-gtimeout-z17b
+  rec=$(make_spawn_case preflight-gtimeout pi "$id")
+  read_case_record "$rec"
+  PREFLIGHT_BIN="$CASE_DIR/checker"
+  PREFLIGHT_RESULT=ok
+  timeout_marker="$CASE_DIR/timeout-called"
+  gtimeout_marker="$CASE_DIR/gtimeout-called"
+  perl_marker="$CASE_DIR/perl-called"
+  make_preflight_checker "$PREFLIGHT_BIN"
+  make_incompatible_timeout_with_gtimeout "$FAKEBIN_DIR" "$timeout_marker" "$gtimeout_marker" "$perl_marker"
+
+  out=$(run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "$id" "$PROJ_DIR" \
+    --model antigravity/gemini-3.6-flash --effort high)
+  status=$?
+  expect_code 0 "$status" "compatible gtimeout should replace incompatible timeout"
+  assert_meta_profile "$HOME_DIR/state/$id.meta" pi antigravity/gemini-3.6-flash high
+  assert_absent "$timeout_marker" "incompatible timeout was selected despite compatible gtimeout"
+  assert_present "$gtimeout_marker" "compatible gtimeout was not selected"
+  assert_absent "$perl_marker" "gtimeout fallback invoked Perl"
+  pass "compatible gtimeout is selected when timeout lacks kill-after"
+}
+
 test_antigravity_preflight_configured_profile_covers_scouts() {
   local rec id out status
   id=preflight-profile-scout-z17b
@@ -1226,6 +1279,7 @@ test_non_claude_harness_ignores_config_dir
 test_active_dispatch_profile_does_not_block_secondmate_launch
 test_antigravity_preflight_exit_zero_preserves_profile
 test_antigravity_preflight_without_perl_uses_native_timeout
+test_antigravity_preflight_prefers_compatible_gtimeout
 test_antigravity_preflight_configured_profile_covers_scouts
 test_antigravity_preflight_all_unusable_falls_back_before_metadata
 test_antigravity_preflight_raw_launch_uses_fallback
