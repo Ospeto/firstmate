@@ -268,12 +268,11 @@ This section is the single owner of the canonical schema and its per-field seman
 Per rule, `when` and `use` are required.
 Both `use` and the optional top-level `default` accept either one profile object or a non-empty array of profile objects.
 The single-object form stays fully backward-compatible, and every profile needs `harness`.
-Profile `model` and `effort` fields and rule `why` are optional.
+Profile `model` and `effort` fields and rule `why` and `select` fields are optional non-empty strings; `select` accepts only `quota-balanced`.
 An omitted model or effort means the selected harness uses its own default for that axis.
 Every profile array is an implicit quota-aware choice resolved through `quota-array-dispatch`.
 If no dispatch rule fits, firstmate resolves `default` through the same object-or-array path before falling back to `config/crew-harness`.
-A minimal risk matrix should keep routine implementation on a fast profile, route authentication, security, concurrency, and high-blast-radius work to a stronger implementation profile, and reserve an independent deep-review profile for Oracle or a post-PR release-risk profile for Lelouch.
-Use `why` to name those role boundaries rather than adding a second role schema; `Fixer` is implementation-only, `Oracle` is read-only correctness and architecture review, and `Lelouch` is read-only post-PR release-risk review.
+The copyable example shows the minimal risk matrix; use `why` to label profile roles without adding a second role schema, and follow the authoritative role and effort boundaries in [`harness-adapters`](../.agents/skills/harness-adapters/SKILL.md#launch-profile-axes).
 If a selected profile carries an effort value the chosen harness does not accept, `fm-spawn.sh` records the requested `effort=` in task meta for traceability but omits the launch flag, and bootstrap reports the invalid harness/effort pair as a `CREW_DISPATCH` diagnostic when it is visible in the file.
 See [`docs/examples/crew-dispatch.json`](examples/crew-dispatch.json) for a starting point to copy into local `config/crew-dispatch.json`.
 When the file exists, bootstrap validates it with `jq`.
@@ -287,10 +286,10 @@ Secondmate homes inherit this file from the primary, so a secondmate's own crewm
 
 Before `fm-spawn.sh` creates a worktree, backend endpoint, agent process, or task metadata, every final model whose name begins with `antigravity/` must pass the Antigravity quota preflight.
 The checker is the executable `antigravity-account-check.js` under `${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}/extensions/antigravity-account-switcher/bin/` (falling back to `${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}/extensions/pi-antigravity-account-switcher/bin/antigravity-account-check.js`), unless the test-only `FM_ANTIGRAVITY_PREFLIGHT_BIN` override is set.
-The preflight invokes that checker with `check`, bounds its runtime with `FM_ANTIGRAVITY_PREFLIGHT_TIMEOUT_SECONDS` (default `30` seconds) using `timeout`, `gtimeout`, or `perl`, and discards output after the bounded `FM_ANTIGRAVITY_PREFLIGHT_OUTPUT_BYTES` limit (default `8192` bytes) so checker output cannot be surfaced as a secret-bearing diagnostic.
+The preflight invokes that checker with `check`, bounds its runtime with `FM_ANTIGRAVITY_PREFLIGHT_TIMEOUT_SECONDS` (default `30` seconds) using Perl, and discards output after the bounded `FM_ANTIGRAVITY_PREFLIGHT_OUTPUT_BYTES` limit (default `8192` bytes) so checker output cannot be surfaced as a secret-bearing diagnostic.
 Exit `0` preserves the requested model and effort.
 The checker's documented exit `1` means all configured accounts are unusable and changes the final profile to `cockpit/gpt-5.6-luna` at `high` effort.
-Missing or non-executable checkers, invalid limits, missing timeout support (`timeout`, `gtimeout`, or `perl`), timeouts, crashes, errors, and unknown exit results refuse the spawn before those side effects occur.
+Missing or non-executable checkers, invalid limits, missing Perl, timeouts, crashes, errors, and unknown exit results refuse the spawn before those side effects occur.
 The same boundary applies to explicit models, dispatch-profile models, scouts, secondmates, and raw launch commands, while non-Antigravity models bypass it.
 
 ## Toolchain

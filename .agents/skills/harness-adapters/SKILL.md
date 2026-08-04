@@ -120,7 +120,7 @@ Never select `max` from this fallback; use it only when the captain has explicit
 
 Role-specific effort and reviewer boundaries are owned here: routine deep Oracle review uses `xhigh`, while `max` requires an explicit architecture or security escalation from the captain.
 `Fixer` is implementation-only, `Oracle` is read-only correctness and architecture review, and `Lelouch` is read-only post-PR release-risk review.
-The Oracle review budget is one initial review plus at most one re-review after fixes; unresolved findings after that re-review are an escalation or failure, never a third review loop.
+`AGENTS.md` section 7 owns Oracle review timing, fallback, and cycle budget.
 
 The supported launch-profile flags below are verified locally; each row records its evidence.
 
