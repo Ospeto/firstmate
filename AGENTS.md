@@ -90,7 +90,7 @@ state/               volatile runtime signals; gitignored
   <id>.turn-ended    touched by turn-end hooks
   <id>.grok-turnend-token   firstmate-owned grok hook registry token for the task; removed by teardown
   <id>.kimi-turnend-token   firstmate-owned Kimi hook registry token for the task; removed by teardown
-  <id>.meta          written by fm-spawn: window=, endpoint_task_id=, worktree=, project=, harness=, model=, effort=, kind=, mode=, yolo=, tasktmp=; kind=secondmate also records home= and projects=; a non-default runtime backend records further backend-specific fields (docs/configuration.md "Runtime backend"; bin/fm-backend.sh, section 8); fm-pr-check, including through fm-pr-merge, records one canonical pr= and the forge's pr_head= when available (GitHub pull requests and GitLab merge requests; docs/gitlab-merge-watch.md); fm-x-link appends x_request=, x_request_ts=, x_followups=, and optional x_platform=/x_reply_max_chars= for an X-mode-originated task (section 14)
+  <id>.meta          written by fm-spawn: window=, endpoint_task_id=, worktree=, project=, harness=, model=, effort=, kind=, mode=, yolo=, tasktmp=; same-branch recovery also records thinking=, resume=1, and branch=; kind=secondmate also records home= and projects=; a non-default runtime backend records further backend-specific fields (docs/configuration.md "Runtime backend"; bin/fm-backend.sh, section 8); fm-pr-check, including through fm-pr-merge, records one canonical pr= and the forge's pr_head= when available (GitHub pull requests and GitLab merge requests; docs/gitlab-merge-watch.md); fm-x-link appends x_request=, x_request_ts=, x_followups=, and optional x_platform=/x_reply_max_chars= for an X-mode-originated task (section 14)
   <id>.herdr-presentation  quarantinable attempt and restart-binding journal for Herdr's optional visual projection; never task or endpoint authority; see docs/herdr-backend.md "Optional presentation spaces"
   <id>.check.sh      authenticated slow poll; the watcher dispatches validated PR data and the byte-identified X shim through trusted repository scripts, runs registered custom checks from hash-validated private snapshots, and rejects every other state check without execution
   <id>.check-trust   private content binding created by fm-check-register.sh for an intentional custom check
@@ -178,6 +178,7 @@ Break genuine evidence ties without array-order or harness bias.
 `quota-axi` owns how model or product windows relate to bounding account windows and remains data-only.
 Load `quota-array-dispatch` before choosing among a matched profile array; that skill is the single owner of the completion-aware selection procedure.
 The generic effort fallback and its precedence are owned by `harness-adapters`: explicit captain and standing configured effort win; otherwise use low for well-understood explicit work, xhigh for ambiguous investigation or design, intermediate levels proportionally, and never max without explicit captain preference.
+The role-specific effort and reviewer boundaries are owned by `harness-adapters`; section 7 owns Oracle review timing, fallback, and cycle budget.
 Do not add model-specific versions of that policy.
 
 `secondmate-provisioning` owns secondmate harness pins and inherited local material, while `harness-adapters` owns the harness consequences.
@@ -277,6 +278,7 @@ Supervise all live work under section 8.
 The selected delivery path owns its own rigor.
 For every PR-based ship task, after the implementation commit and before raising a PR (for direct-PR) or starting `/no-mistakes` (for no-mistakes), the worker must launch `@oracle` to review the exact committed range, absorb its correctness and risk findings, and resolve actionable findings.
 This provides independent review evidence for the worker, not merge authority and not a replacement for the selected delivery path's own validation or the captain's merge decision.
+The review budget is one initial Oracle review plus at most one re-review after fixes; unresolved findings after that re-review become a clear escalation or failure, never an unbounded review loop.
 For direct-PR tasks, if `@oracle` is unavailable, the worker discloses the fallback and proceeds.
 For no-mistakes tasks, the worker runs `@oracle` before starting `/no-mistakes` and includes actionable findings or fallback disclosure in `--intent` before validation starts, so Oracle review does not create an unsanctioned manual clean-verdict gate outside the pipeline.
 Never hold work for an unsanctioned manual clean verdict, stack serial manual reviews, or infer merge authority for a reviewer from security, architecture, or risk alone.
