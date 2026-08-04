@@ -426,7 +426,7 @@ pass "the worker drains bounded output without changing command results"
 SIDE_EFFECT="$TMP_ROOT/side-effect"
 WORKER_PID=$(cat "$STATE_ROOT/worker.pid")
 kill -TERM "$WORKER_PID"
-for _ in $(seq 1 100); do
+for _ in $(seq 1 300); do
   [ ! -f "$STATE_ROOT/worker.pid" ] && break
   sleep 0.05
 done

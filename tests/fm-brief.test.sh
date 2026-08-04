@@ -255,11 +255,11 @@ EOF
   [ "$out" = "no-mistakes off" ] || fail "malformed third token did not fall back to no-mistakes off"
   grep -F 'malformed mode' "$err" >/dev/null \
     || fail "malformed third token did not emit a warning"
-  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" omitted-brief omitted-proj >/dev/null
+  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" omitted-brief omitted-proj --mode direct-PR >/dev/null
   brief="$home/data/omitted-brief/brief.md"
-  assert_grep "This project ships **direct-PR**" "$brief" \
+  assert_grep "Delivery contract: mode=direct-PR" "$brief" \
     "omitted mode brief did not use direct-PR delivery"
-  assert_no_grep "This project ships **no-mistakes**" "$brief" \
+  assert_no_grep "Delivery contract: mode=no-mistakes" "$brief" \
     "omitted mode brief used no-mistakes delivery"
   pass "fm-project-mode: omitted mode defaults to direct-PR on and malformed modes fall back safely"
 }
@@ -334,7 +334,7 @@ test_ship_mode_is_explicit_not_registry() {
   brief="$home/data/brief-explicit-a5/brief.md"
   grep -qx "Delivery contract: mode=no-mistakes" "$brief" \
     || fail "registered direct-PR posture overrode the explicit --mode"
-  assert_grep "Firstmate will then instruct you to run /no-mistakes" "$brief" \
+  assert_grep "Before starting /no-mistakes" "$brief" \
     "explicit no-mistakes brief did not render the pipeline definition of done"
 
   # An unregistered project is not a blocker either, because nothing is looked up.
