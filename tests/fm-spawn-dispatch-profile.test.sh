@@ -152,12 +152,13 @@ SH
 }
 
 make_timeout_without_perl() {
-  local fakebin=$1 perl_marker=$2
-  cat > "$fakebin/timeout" <<'SH'
+  local fakebin=$1 perl_marker=$2 native_timeout
+  native_timeout=$(command -v timeout || command -v gtimeout) || fail "native timeout command is unavailable"
+  cat > "$fakebin/timeout" <<SH
 #!/usr/bin/env bash
 set -u
 shift
-exec "$@"
+exec '$native_timeout' "\$@"
 SH
   chmod +x "$fakebin/timeout"
   cat > "$fakebin/perl" <<SH
