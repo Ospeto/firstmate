@@ -145,6 +145,23 @@ SH
   chmod +x "$path"
 }
 
+make_timeout_without_perl() {
+  local fakebin=$1 perl_marker=$2
+  cat > "$fakebin/timeout" <<'SH'
+#!/usr/bin/env bash
+set -u
+shift
+exec "$@"
+SH
+  chmod +x "$fakebin/timeout"
+  cat > "$fakebin/perl" <<SH
+#!/usr/bin/env bash
+printf '%s\\n' called > '$perl_marker'
+exit 127
+SH
+  chmod +x "$fakebin/perl"
+}
+
 make_large_preflight_checker() {
   local path=$1 result=${2:-ok}
   cat > "$path" <<SH
@@ -750,6 +767,27 @@ test_antigravity_preflight_exit_zero_preserves_profile() {
   pass "exit 0 keeps the requested Antigravity model and effort"
 }
 
+test_antigravity_preflight_without_perl_uses_native_timeout() {
+  local rec id out status perl_marker
+  id=preflight-no-perl-z17a
+  rec=$(make_spawn_case preflight-no-perl pi "$id")
+  read_case_record "$rec"
+  PREFLIGHT_BIN="$CASE_DIR/checker"
+  PREFLIGHT_LOG="$CASE_DIR/checker.log"
+  PREFLIGHT_RESULT=ok
+  perl_marker="$CASE_DIR/perl-called"
+  make_preflight_checker "$PREFLIGHT_BIN"
+  make_timeout_without_perl "$FAKEBIN_DIR" "$perl_marker"
+
+  out=$(run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "$id" "$PROJ_DIR" \
+    --model antigravity/gemini-3.6-flash --effort high)
+  status=$?
+  expect_code 0 "$status" "native timeout should permit Antigravity launch without Perl"
+  assert_meta_profile "$HOME_DIR/state/$id.meta" pi antigravity/gemini-3.6-flash high
+  assert_absent "$perl_marker" "Antigravity preflight invoked Perl despite native timeout availability"
+  pass "native timeout path removes Perl as a required Antigravity dependency"
+}
+
 test_antigravity_preflight_configured_profile_covers_scouts() {
   local rec id out status
   id=preflight-profile-scout-z17b
@@ -1180,6 +1218,7 @@ test_claude_omits_config_dir_prefix_when_unset
 test_non_claude_harness_ignores_config_dir
 test_active_dispatch_profile_does_not_block_secondmate_launch
 test_antigravity_preflight_exit_zero_preserves_profile
+test_antigravity_preflight_without_perl_uses_native_timeout
 test_antigravity_preflight_configured_profile_covers_scouts
 test_antigravity_preflight_all_unusable_falls_back_before_metadata
 test_antigravity_preflight_raw_launch_uses_fallback
