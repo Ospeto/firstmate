@@ -181,6 +181,7 @@ Break genuine evidence ties without array-order or harness bias.
 `quota-axi` owns how model or product windows relate to bounding account windows and remains data-only.
 Load `quota-array-dispatch` before choosing among a matched profile array; that skill is the single owner of the completion-aware selection procedure.
 The generic effort fallback and its precedence are owned by `harness-adapters`: explicit captain and standing configured effort win; otherwise use low for well-understood explicit work, xhigh for ambiguous investigation or design, intermediate levels proportionally, and never max without explicit captain preference.
+The role-specific effort and reviewer boundaries are owned by `harness-adapters`, including Oracle's xhigh default, explicit max escalation, and bounded review budget.
 Do not add model-specific versions of that policy.
 
 `secondmate-provisioning` owns secondmate harness pins and inherited local material, while `harness-adapters` owns the harness consequences.
@@ -286,6 +287,7 @@ Supervise all live work under section 8.
 The selected delivery path owns its own rigor.
 For every PR-based ship task, after the implementation commit and before raising a PR (for direct-PR) or starting `/no-mistakes` (for no-mistakes), the worker must launch `@oracle` to review the exact committed range, absorb its correctness and risk findings, and resolve actionable findings.
 This provides independent review evidence for the worker, not merge authority and not a replacement for the selected delivery path's own validation or the captain's merge decision.
+The review budget is one initial Oracle review plus at most one re-review after fixes; unresolved findings after that re-review become a clear escalation or failure, never an unbounded review loop.
 For direct-PR tasks, if `@oracle` is unavailable, the worker discloses the fallback and proceeds.
 For no-mistakes tasks, the worker runs `@oracle` before starting `/no-mistakes` and includes actionable findings or fallback disclosure in `--intent` before validation starts, so Oracle review does not create an unsanctioned manual clean-verdict gate outside the pipeline.
 Never hold work for an unsanctioned manual clean verdict, stack serial manual reviews, or infer merge authority for a reviewer from security, architecture, or risk alone.

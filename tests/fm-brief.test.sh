@@ -219,6 +219,10 @@ assert_review_path_rule() {
     "$context brief missing committed-range review verification"
   assert_grep "if the review tool cannot access those commits or shows an empty range, report the mismatch instead of reviewing it." "$brief" \
     "$context brief missing committed-range mismatch handling"
+  assert_grep "Follow the authoritative role contract in \`harness-adapters\`: Fixer is implementation-only, Oracle is read-only correctness and architecture review, Lelouch is read-only post-PR release-risk review, ordinary deep Oracle review uses xhigh, and max requires explicit architecture or security escalation." "$brief" \
+    "$context brief missing role and effort boundaries"
+  assert_grep "Use one initial Oracle review and at most one re-review after fixes; if actionable findings remain after re-review, escalate or fail instead of looping." "$brief" \
+    "$context brief missing bounded Oracle review cycle"
 }
 
 test_project_mode_defaults_and_rejects_malformed() {
