@@ -224,6 +224,18 @@ assert_review_path_rule() {
     "$context brief missing bounded Oracle review cycle"
 }
 
+assert_todo_tracking_rule() {
+  local brief=$1 context=$2
+  assert_grep "# Todo tracking" "$brief" \
+    "$context brief missing Todo tracking section"
+  assert_grep "Derive a useful checklist from the filled \`# Task\`." "$brief" \
+    "$context brief missing task checklist derivation instruction"
+  assert_grep "Create those items with your workspace \`todo\` tool." "$brief" \
+    "$context brief missing workspace todo tool creation instruction"
+  assert_grep "Keep exactly one item in progress at a time, and complete items immediately when done." "$brief" \
+    "$context brief missing in-progress item limit and immediate completion instruction"
+}
+
 test_project_mode_defaults_and_rejects_malformed() {
   local home out brief err
   home="$TMP_ROOT/project-mode-home"
@@ -287,6 +299,7 @@ test_ship_modes_generate_clean_briefs() {
     assert_specialist_rule "$brief" "$id"
     assert_web_research_rule "$brief" "$id"
     assert_review_path_rule "$brief" "$id"
+    assert_todo_tracking_rule "$brief" "$id"
     assert_no_grep "EOF" "$brief" "$id: brief leaked a heredoc EOF marker (unterminated heredoc)"
   done
   pass "fm-brief.sh: no-mistakes/direct-PR/local-only briefs generate cleanly"
@@ -712,6 +725,7 @@ test_scout_and_secondmate_scaffold() {
   assert_specialist_rule "$brief" "scout"
   assert_web_research_rule "$brief" "scout"
   assert_review_path_rule "$brief" "scout"
+  assert_todo_tracking_rule "$brief" "scout"
 
   FM_SECONDMATE_CHARTER='Supervise the alpha domain.' \
     FM_HOME="$BRIEF_HOME" "$ROOT/bin/fm-brief.sh" brief-sm-q6 --secondmate alpha >/dev/null 2>&1 \
@@ -720,7 +734,29 @@ test_scout_and_secondmate_scaffold() {
   assert_present "$brief" "secondmate charter was not scaffolded"
   assert_grep "persistent second mate" "$brief" \
     "secondmate charter must declare its role"
+  assert_no_grep "# Todo tracking" "$brief" \
+    "secondmate charter brief must omit the Todo tracking section"
   pass "fm-brief: scout and secondmate code paths still scaffold well-formed briefs"
+}
+
+test_ordinary_briefs_include_todo_tracking_and_secondmate_omits_it() {
+  local home ship_brief scout_brief sm_brief
+  home="$TMP_ROOT/todo-home"
+  mkdir -p "$home/data"
+  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" ship-task myrepo >/dev/null 2>&1
+  ship_brief="$home/data/ship-task/brief.md"
+  assert_todo_tracking_rule "$ship_brief" "ship"
+
+  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" scout-task myrepo --scout >/dev/null 2>&1
+  scout_brief="$home/data/scout-task/brief.md"
+  assert_todo_tracking_rule "$scout_brief" "scout"
+
+  FM_HOME="$home" FM_SECONDMATE_CHARTER="Secondmate domain" \
+    "$ROOT/bin/fm-brief.sh" sm-task --secondmate --no-projects >/dev/null 2>&1
+  sm_brief="$home/data/sm-task/brief.md"
+  assert_no_grep "# Todo tracking" "$sm_brief" \
+    "secondmate charter brief must omit the Todo tracking section"
+  pass "fm-brief.sh: ordinary ship and scout briefs include Todo tracking, while secondmate charters omit it"
 }
 
 test_script_parses
@@ -741,3 +777,4 @@ test_secondmate_directory_paths_are_absolute_and_output_is_stable
 test_pause_verb_override_renders_all_brief_scaffolds
 test_scout_and_secondmate_load_decision_hold_policy
 test_scout_and_secondmate_scaffold
+test_ordinary_briefs_include_todo_tracking_and_secondmate_omits_it
