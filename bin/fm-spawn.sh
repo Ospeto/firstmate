@@ -1850,9 +1850,11 @@ if [ "$KIND" = secondmate ]; then
   : "${SECONDMATE_PROJECTS:=}"
 else
   PROJ_NAME=$(basename "$PROJ_ABS")
-  read -r MODE YOLO <<EOF
+  read -r PROJ_MODE PROJ_YOLO <<EOF
 $("$FM_ROOT/bin/fm-project-mode.sh" "$PROJ_NAME")
 EOF
+  [ "$MODE_SET" -eq 1 ] || MODE=$PROJ_MODE
+  [ "$YOLO_SET" -eq 1 ] || YOLO=$PROJ_YOLO
 fi
 
 META_WINDOW=$T
