@@ -1030,7 +1030,6 @@ fi
 secondmate_registry_value() {
   secondmate_registry_field "$DATA/secondmates.md" "$1" "$2"
 }
-}
 
 shell_quote() {
   printf "'"
