@@ -33,8 +33,9 @@
 # --raw prints the registered annotation unmapped, so a caller that must tell a
 # conditional policy apart from a flat mode sees "no-mistakes-prod-only" itself.
 #
-# An unknown/missing project or unknown mode falls back to "no-mistakes off" and warns
-# to stderr, so a typo never silently drops the gate.
+# An unknown or missing project, malformed registry annotation, or unknown mode
+# falls back to "no-mistakes off" and warns to stderr, so a typo never silently
+# drops the gate.
 # Usage: fm-project-mode.sh [--raw] <project-name>
 set -eu
 

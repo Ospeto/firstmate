@@ -32,7 +32,10 @@
 #   or herdr), refuses unless the endpoint's shell is sitting in the recorded
 #   worktree, and clears the previous harness's per-task wiring before arming
 #   the new incarnation.
-#        --resume reuses the recorded task worktree and branch after endpoint loss; it never allocates a replacement worktree.
+#   --resume reuses the recorded task worktree and branch after endpoint loss;
+#   it never allocates a replacement worktree. A task recorded from a raw launch
+#   command requires an explicit --harness for --resume because its original
+#   command cannot be reconstructed from the recorded basename.
 #   --harness <name> is the explicit per-spawn harness/profile adapter. The old
 #   positional harness arg still works for back-compat.
 #   --model <name> and --effort <low|medium|high|xhigh|max> are concrete profile
