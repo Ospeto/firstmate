@@ -738,6 +738,7 @@ spawn_abort_cleanup() {
             echo "worktree=${WT:-}"
             echo "project=$PROJ_ABS"
             echo "harness=$HARNESS"
+            [ "$RAW_LAUNCH" -eq 0 ] || echo "raw_launch=1"
             echo "kind=$KIND"
             [ -z "${MODE:-}" ] || echo "mode=$MODE"
             [ -z "${YOLO:-}" ] || echo "yolo=$YOLO"
@@ -1224,6 +1225,12 @@ case "$HARNESS" in
   pi|pi-signed) LAUNCH="FM_PI_HARNESS=$HARNESS $LAUNCH" ;;
 esac
 
+shell_quote() {
+  printf "'"
+  printf '%s' "$1" | sed "s/'/'\\\\''/g"
+  printf "'"
+}
+
 # muse is verified as a CREWMATE/SCOUT adapter only. A secondmate is a firstmate
 # instance, so it needs a primary supervision protocol; muse has none, and its
 # Claude-compatible hook dialect explicitly rejects the model-reawakening and
@@ -1265,18 +1272,50 @@ if [ "$KIND" = secondmate ] && [ -z "$ARG3" ]; then
   fi
 fi
 
-antigravity_preflight() {
-  if [ "$RAW_LAUNCH" -eq 1 ] && [ -z "$MODEL" ]; then
-    local cleaned_word
-    for word in $LAUNCH; do
-      cleaned_word=$(printf '%s' "$word" | tr -d "\"'")
+resolve_raw_launch_model() {
+  local word cleaned_word candidate raw_model= expect_model=0
+  [ "$RAW_LAUNCH" -eq 1 ] || return 0
+  for word in $LAUNCH; do
+    cleaned_word=$(printf '%s' "$word" | tr -d "\"'")
+    if [ "$expect_model" -eq 1 ]; then
+      candidate=$cleaned_word
+      expect_model=0
+    else
       case "$cleaned_word" in
-        --model=antigravity/*) MODEL=${cleaned_word#--model=} ;;
-        antigravity/*) MODEL=$cleaned_word ;;
+        --model) expect_model=1; continue ;;
+        --model=*) candidate=${cleaned_word#--model=} ;;
+        antigravity/*) candidate=$cleaned_word ;;
+        *) continue ;;
       esac
-    done
+    fi
+    [ -n "$candidate" ] || {
+      echo "error: raw launch command has an empty --model value" >&2
+      return 1
+    }
+    if [ -n "$raw_model" ] && [ "$raw_model" != "$candidate" ]; then
+      echo "error: raw launch command names conflicting models '$raw_model' and '$candidate'" >&2
+      return 1
+    fi
+    raw_model=$candidate
+  done
+  [ "$expect_model" -eq 0 ] || {
+    echo "error: raw launch command has --model without a value" >&2
+    return 1
+  }
+  if [ -n "$raw_model" ]; then
+    if [ "$MODEL_SET" -eq 1 ] && [ "$MODEL" != "$raw_model" ]; then
+      echo "error: raw launch command model '$raw_model' contradicts explicit --model '$MODEL'" >&2
+      return 1
+    fi
+    MODEL=$raw_model
+  elif [ -n "$MODEL" ] && [ "$MODEL" != default ]; then
+    LAUNCH="$LAUNCH --model $(shell_quote "$MODEL")"
   fi
+}
 
+resolve_raw_launch_model || exit 1
+
+antigravity_preflight() {
   case "$MODEL" in
     antigravity/*) ;;
     *) return 0 ;;
@@ -1390,12 +1429,6 @@ fi
 
 secondmate_registry_value() {
   secondmate_registry_field "$DATA/secondmates.md" "$1" "$2"
-}
-
-shell_quote() {
-  printf "'"
-  printf '%s' "$1" | sed "s/'/'\\\\''/g"
-  printf "'"
 }
 
 resolve_kimi_binary() {
@@ -2704,7 +2737,7 @@ fi
 preserve_relaunch_meta() {
   awk -F= '
     BEGIN {
-      split("window endpoint_task_id worktree project harness kind mode yolo tasktmp model effort busy_gen traceparent backend herdr_session herdr_workspace_id herdr_tab_id herdr_pane_id zellij_session zellij_tab_id zellij_pane_id orca_worktree_id terminal cmux_workspace_id cmux_surface_id home projects control_relaunch_tx", keys, " ")
+      split("window endpoint_task_id worktree project harness raw_launch kind mode yolo tasktmp model effort busy_gen traceparent backend herdr_session herdr_workspace_id herdr_tab_id herdr_pane_id zellij_session zellij_tab_id zellij_pane_id orca_worktree_id terminal cmux_workspace_id cmux_surface_id home projects control_relaunch_tx", keys, " ")
       for (i in keys) owned[keys[i]] = 1
     }
     !($1 in owned)
@@ -2716,6 +2749,7 @@ preserve_relaunch_meta() {
   echo "worktree=$WT"
   echo "project=$PROJ_ABS"
   echo "harness=$HARNESS"
+  [ "$RAW_LAUNCH" -eq 0 ] || echo "raw_launch=1"
   echo "kind=$KIND"
   [ -z "$MODE" ] || echo "mode=$MODE"
   [ -z "$YOLO" ] || echo "yolo=$YOLO"

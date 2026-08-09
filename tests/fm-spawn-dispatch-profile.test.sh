@@ -517,6 +517,7 @@ test_active_dispatch_profile_allows_raw_launch_command() {
   expect_code 0 "$status" "raw launch command should satisfy active dispatch-profile requirement"
   assert_contains "$out" "spawned $id harness=custom-agent" "spawn did not report raw command harness"
   assert_meta_profile "$HOME_DIR/state/$id.meta" custom-agent default default
+  assert_grep "raw_launch=1" "$HOME_DIR/state/$id.meta" "raw launch provenance was not recorded"
   launch=$(cat "$LAUNCH_LOG")
   [ "$launch" = "custom-agent --flag" ] || fail "raw launch command changed"$'\n'"actual: $launch"
   pass "active crew-dispatch profile allows the raw launch-command escape hatch"
@@ -983,6 +984,45 @@ test_antigravity_preflight_raw_launch_uses_fallback() {
   pass "exit 1 applies the Luna fallback to raw launch commands"
 }
 
+test_antigravity_preflight_raw_launch_preserves_usable_explicit_model() {
+  local rec id out status launch
+  id=preflight-raw-usable-z18c
+  rec=$(make_spawn_case preflight-raw-usable pi "$id")
+  read_case_record "$rec"
+  PREFLIGHT_BIN="$CASE_DIR/checker"
+  PREFLIGHT_LOG="$CASE_DIR/checker.log"
+  PREFLIGHT_RESULT=ok
+  make_preflight_checker "$PREFLIGHT_BIN"
+
+  out=$(run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "$id" "$PROJ_DIR" \
+    "custom-agent --flag" --model antigravity/gemini-3.6-flash --effort high)
+  status=$?
+  expect_code 0 "$status" "usable explicit raw-launch model should be launched"
+  assert_meta_profile "$HOME_DIR/state/$id.meta" custom-agent antigravity/gemini-3.6-flash high
+  launch=$(cat "$LAUNCH_LOG")
+  assert_contains "$launch" "custom-agent --flag --model 'antigravity/gemini-3.6-flash'" \
+    "explicit raw-launch model was recorded but not launched"
+  assert_grep "check" "$PREFLIGHT_LOG" "explicit raw-launch model did not invoke checker"
+  pass "usable explicit raw-launch models reach both command and metadata"
+}
+
+test_raw_launch_rejects_contradicting_model_owners() {
+  local rec id out status
+  id=preflight-raw-contradiction-z18d
+  rec=$(make_spawn_case preflight-raw-contradiction pi "$id")
+  read_case_record "$rec"
+  PREFLIGHT_BIN="$CASE_DIR/missing-checker"
+
+  out=$(run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "$id" "$PROJ_DIR" \
+    "custom-agent --model=antigravity/gemini-3.6-flash" --model cockpit/gpt-5.6-luna)
+  status=$?
+  expect_code 1 "$status" "contradicting raw and explicit models should refuse"
+  assert_contains "$out" "contradicts explicit --model" "model contradiction refusal was not concrete"
+  assert_absent "$HOME_DIR/state/$id.meta" "model contradiction wrote task metadata"
+  [ ! -s "$LAUNCH_LOG" ] || fail "model contradiction created or launched an endpoint"
+  pass "raw launch commands refuse conflicting model owners"
+}
+
 test_antigravity_preflight_error_is_secret_safe_and_refuses() {
   local rec id out status
   id=preflight-error-z19
@@ -1366,6 +1406,8 @@ test_antigravity_preflight_refuses_without_compatible_timeout
 test_antigravity_preflight_configured_profile_covers_scouts
 test_antigravity_preflight_all_unusable_falls_back_before_metadata
 test_antigravity_preflight_raw_launch_uses_fallback
+test_antigravity_preflight_raw_launch_preserves_usable_explicit_model
+test_raw_launch_rejects_contradicting_model_owners
 test_antigravity_preflight_error_is_secret_safe_and_refuses
 test_antigravity_preflight_missing_and_non_executable_refuse
 test_antigravity_preflight_timeout_refuses

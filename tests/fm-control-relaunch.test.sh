@@ -505,6 +505,31 @@ test_prefixed_recorded_harness_requires_explicit_replacement() {
   pass "fm-control relaunch: a prefixed command requires an explicit replacement harness"
 }
 
+test_exact_family_raw_launch_requires_explicit_replacement() {
+  local dir out rc meta brief
+  dir=$(new_case rawexact rl35)
+  add_ship_task "$dir" rl35 claude
+  meta="$dir/home/state/rl35.meta"
+  brief="$dir/home/data/rl35/brief.md"
+  printf 'raw_launch=1\n' >> "$meta"
+  cp "$meta" "$dir/meta.before"
+  cp "$brief" "$dir/brief.before"
+
+  out=$(run_control "$dir" rl35 relaunch --note "continue safely"); rc=$?
+  expect_code 1 "$rc" "implicit relaunch from an exact-family raw command should refuse"
+  assert_contains "$out" "original launch command cannot be reconstructed from its recorded basename" \
+    "the raw provenance refusal should name the missing launch identity"
+  cmp -s "$meta" "$dir/meta.before" \
+    || fail "a refused exact-family raw relaunch must leave metadata byte-identical"
+  cmp -s "$brief" "$dir/brief.before" \
+    || fail "a refused exact-family raw relaunch must leave instructions byte-identical"
+  [ "$(cat "$dir/fake/command")" = claude ] \
+    || fail "a refused exact-family raw relaunch must leave the original agent alive"
+  [ -z "$(cat "$dir/fake/literal")" ] && [ -z "$(cat "$dir/fake/keys")" ] \
+    || fail "a refused exact-family raw relaunch must deliver no lifecycle input"
+  pass "fm-control relaunch: exact-family raw commands require an explicit replacement"
+}
+
 test_same_harness_relaunch_keeps_the_profile_axes() {
   local dir out rc
   dir=$(new_case keepprofile rl6)
@@ -528,6 +553,31 @@ test_explicit_model_wins_over_the_recorded_one() {
   [ "$(meta_field "$dir" rl7 model)" = sonnet ] || fail "an explicit model should be recorded"
   [ "$(meta_field "$dir" rl7 effort)" = low ] || fail "an explicit effort should be recorded"
   pass "fm-control relaunch: explicit model and effort win over the recorded ones"
+}
+
+test_relaunch_reports_the_published_fallback_profile() {
+  local dir checker out rc
+  dir=$(new_case fallbackprofile rl36)
+  add_ship_task "$dir" rl36 claude
+  sed 's/^model=default$/model=antigravity\/gemini-3.6-flash/; s/^effort=default$/effort=xhigh/' \
+    "$dir/home/state/rl36.meta" > "$dir/home/state/rl36.meta.tmp"
+  mv "$dir/home/state/rl36.meta.tmp" "$dir/home/state/rl36.meta"
+  checker="$dir/checker"
+  printf '#!/usr/bin/env bash\nexit 1\n' > "$checker"
+  chmod +x "$checker"
+
+  out=$(FM_ANTIGRAVITY_PREFLIGHT_BIN="$checker" \
+    run_control "$dir" rl36 relaunch --note "continue on fallback"); rc=$?
+  expect_code 0 "$rc" "Antigravity exhaustion should relaunch on the fallback profile"$'\n'"$out"
+  [ "$(meta_field "$dir" rl36 model)" = cockpit/gpt-5.6-luna ] \
+    || fail "fallback relaunch metadata did not publish Luna"
+  [ "$(journal_field "$dir" rl36 to_model)" = cockpit/gpt-5.6-luna ] \
+    || fail "completion journal did not report the published fallback model"
+  [ "$(journal_field "$dir" rl36 to_effort)" = high ] \
+    || fail "completion journal did not report the published fallback effort"
+  assert_contains "$out" "model=cockpit/gpt-5.6-luna effort=high" \
+    "success output did not report the published fallback profile"
+  pass "fm-control relaunch: fallback reporting matches published metadata"
 }
 
 test_relaunch_onto_an_unverified_harness_is_refused() {
@@ -1309,8 +1359,10 @@ test_harness_switch_moves_the_record_and_clears_prior_wiring
 test_harness_switch_does_not_carry_the_old_profile_axes
 test_harness_switch_resolves_a_prefixed_recorded_harness
 test_prefixed_recorded_harness_requires_explicit_replacement
+test_exact_family_raw_launch_requires_explicit_replacement
 test_same_harness_relaunch_keeps_the_profile_axes
 test_explicit_model_wins_over_the_recorded_one
+test_relaunch_reports_the_published_fallback_profile
 test_relaunch_onto_an_unverified_harness_is_refused
 test_prior_harness_turnend_registry_entry_is_cleared
 test_wiring_removal_failure_refuses_before_replacement_arm

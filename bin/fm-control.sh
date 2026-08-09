@@ -38,8 +38,8 @@
 #              durable config/secondmate-harness pin (harness plus its optional
 #              model and effort tokens) exactly as any other respawn does, while
 #              a ship or scout keeps the exact adapter already recorded for it.
-#              A prefixed raw-command basename cannot reconstruct its launch
-#              command, so relaunch requires an explicit --harness for it.
+#              A raw launch command cannot be reconstructed from its basename,
+#              so relaunch requires an explicit --harness for it.
 #              --note is required for a ship or scout, whose replacement
 #              inherits the local copy but none of the conversation; a
 #              secondmate reconciles its own home's records at startup, so its
@@ -506,6 +506,7 @@ CONFIG_MODEL=
 CONFIG_EFFORT=
 PRIOR_MODEL=
 PRIOR_EFFORT=
+PRIOR_RAW_LAUNCH=0
 TARGET_HARNESS=$HARNESS
 TARGET_MODEL=
 TARGET_EFFORT=
@@ -602,10 +603,12 @@ resolve_relaunch_profile() {
   PRIOR_RECORDED_HARNESS=$RECORDED_HARNESS
   PRIOR_MODEL=$(fm_meta_get "$META" model)
   PRIOR_EFFORT=$(fm_meta_get "$META" effort)
+  PRIOR_RAW_LAUNCH=$(fm_meta_get "$META" raw_launch)
   [ -n "$PRIOR_MODEL" ] || PRIOR_MODEL=default
   [ -n "$PRIOR_EFFORT" ] || PRIOR_EFFORT=default
   if [ "$HARNESS_SET" = 0 ] \
-     && [ "$PRIOR_RECORDED_HARNESS" != "$PRIOR_HARNESS" ]; then
+     && { [ "$PRIOR_RAW_LAUNCH" = 1 ] \
+          || [ "$PRIOR_RECORDED_HARNESS" != "$PRIOR_HARNESS" ]; }; then
     die "task $ID records harness '$PRIOR_RECORDED_HARNESS', whose original launch command cannot be reconstructed from its recorded basename; relaunching without --harness would substitute the canonical adapter '$PRIOR_HARNESS' for the command actually running. Pass an explicit --harness to choose the replacement runtime deliberately"
   fi
   CONFIG_HARNESS=
@@ -822,6 +825,10 @@ do_relaunch() {
       || RELAUNCH_META_PUBLISHED=1
     die "the replacement agent for $ID could not be launched on $TARGET_HARNESS"
   fi
+  TARGET_MODEL=$(fm_meta_get "$META" model)
+  TARGET_EFFORT=$(fm_meta_get "$META" effort)
+  [ -n "$TARGET_MODEL" ] || TARGET_MODEL=default
+  [ -n "$TARGET_EFFORT" ] || TARGET_EFFORT=default
 
   state=$(wait_agent_state "$LAUNCH_WAIT" alive) || {
     die "the replacement agent for $ID did not come up within ${LAUNCH_WAIT}s (endpoint reads '$state')"
