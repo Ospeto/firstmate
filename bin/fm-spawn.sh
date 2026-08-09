@@ -1285,7 +1285,7 @@ if [ "$KIND" = secondmate ] && [ -z "$ARG3" ]; then
 fi
 
 resolve_raw_launch_model() {
-  local word cleaned_word candidate raw_model= expect_model=0
+  local word cleaned_word candidate raw_model='' expect_model=0
   [ "$RAW_LAUNCH" -eq 1 ] || return 0
   for word in $LAUNCH; do
     cleaned_word=$(printf '%s' "$word" | tr -d "\"'")
