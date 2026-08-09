@@ -835,6 +835,25 @@ test_spawn_relaunch_without_a_harness_reuses_the_recorded_one() {
   pass "fm-spawn --relaunch: with no explicit harness it reuses the task's recorded one, never the crew default"
 }
 
+test_spawn_relaunch_raw_record_requires_explicit_harness() {
+  local dir out rc meta
+  dir=$(new_case spawnraw rl37)
+  add_ship_task "$dir" rl37 claude
+  meta="$dir/home/state/rl37.meta"
+  printf 'raw_launch=1\n' >> "$meta"
+  cp "$meta" "$dir/meta.before"
+  printf 'zsh' > "$dir/fake/command"
+
+  out=$(run_spawn "$dir" rl37 --relaunch); rc=$?
+  expect_code 1 "$rc" "direct raw relaunch without an explicit harness should refuse"
+  assert_contains "$out" "pass an explicit --harness" \
+    "direct raw relaunch refusal did not name the replacement path"
+  cmp -s "$meta" "$dir/meta.before" || fail "direct raw relaunch refusal changed metadata"
+  [ -z "$(cat "$dir/fake/literal")" ] && [ -z "$(cat "$dir/fake/keys")" ] \
+    || fail "direct raw relaunch refusal sent lifecycle input"
+  pass "fm-spawn --relaunch: raw records require an explicit replacement harness"
+}
+
 # fm-spawn arms per-task wiring on harness PREFIXES, because a task launched
 # from a raw command records that command's basename rather than the exact
 # adapter name. Retirement must resolve the same way, or a task recorded as
@@ -1373,6 +1392,7 @@ test_secondmate_relaunch_onto_a_crewmate_only_adapter_refuses_before_stop
 test_explicit_secondmate_harness_ignores_configured_profile_axes
 test_ship_relaunch_ignores_the_crew_harness_config
 test_spawn_relaunch_without_a_harness_reuses_the_recorded_one
+test_spawn_relaunch_raw_record_requires_explicit_harness
 test_prefixed_prior_harness_wiring_is_still_retired
 test_muse_session_binding_is_retired_on_a_harness_switch
 test_missing_worktree_refuses_before_stopping_anything

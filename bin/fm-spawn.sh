@@ -966,12 +966,20 @@ SPAWN_TASK_LOCK_HELD=1
 RESUME_META="$STATE/$ID.meta"
 RESUME_PROJECT=
 RESUME_WORKTREE=
+require_explicit_raw_replacement_harness() {
+  local meta=$1 action=$2
+  [ "$(fm_meta_get "$meta" raw_launch)" != 1 ] || [ "$HARNESS_SET" -eq 1 ] || {
+    echo "error: $action cannot reconstruct the raw launch command recorded only as harness='$(fm_meta_get "$meta" harness)'; pass an explicit --harness to choose the replacement runtime" >&2
+    return 1
+  }
+}
 if [ "$RESUME" -eq 1 ]; then
   [ "$KIND" != secondmate ] || { echo "error: --resume is only supported for crewmate and scout tasks" >&2; exit 1; }
   [ -f "$RESUME_META" ] && [ ! -L "$RESUME_META" ] || {
     echo "error: --resume requires recorded task metadata at $RESUME_META" >&2
     exit 1
   }
+  require_explicit_raw_replacement_harness "$RESUME_META" --resume || exit 1
   RESUME_PROJECT=$(grep '^project=' "$RESUME_META" | tail -1 | cut -d= -f2- || true)
   RESUME_WORKTREE=$(grep '^worktree=' "$RESUME_META" | tail -1 | cut -d= -f2- || true)
   [ -n "$RESUME_PROJECT" ] && [ -n "$RESUME_WORKTREE" ] || {
@@ -1031,6 +1039,7 @@ if [ "$RELAUNCH" -eq 1 ]; then
     echo "error: --relaunch needs an existing task record; no $RELAUNCH_META" >&2
     exit 1
   }
+  require_explicit_raw_replacement_harness "$RELAUNCH_META" --relaunch || exit 1
   fm_backend_validate_task_endpoint "$RELAUNCH_META" "$ID" || exit 1
   BACKEND=$FM_BACKEND_VALIDATED_BACKEND
   RELAUNCH_TARGET=$FM_BACKEND_VALIDATED_TARGET
@@ -1284,7 +1293,6 @@ resolve_raw_launch_model() {
       case "$cleaned_word" in
         --model) expect_model=1; continue ;;
         --model=*) candidate=${cleaned_word#--model=} ;;
-        antigravity/*) candidate=$cleaned_word ;;
         *) continue ;;
       esac
     fi

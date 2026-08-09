@@ -1023,6 +1023,24 @@ test_raw_launch_rejects_contradicting_model_owners() {
   pass "raw launch commands refuse conflicting model owners"
 }
 
+test_raw_launch_ignores_unowned_antigravity_arguments() {
+  local rec id out status launch
+  id=preflight-raw-positional-z18e
+  rec=$(make_spawn_case preflight-raw-positional pi "$id")
+  read_case_record "$rec"
+  PREFLIGHT_BIN="$CASE_DIR/missing-checker"
+
+  out=$(run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "$id" "$PROJ_DIR" \
+    "custom-agent --model cockpit/gpt-5.6-luna antigravity/help")
+  status=$?
+  expect_code 0 "$status" "unowned Antigravity arguments should not become the model"
+  assert_meta_profile "$HOME_DIR/state/$id.meta" custom-agent cockpit/gpt-5.6-luna default
+  launch=$(cat "$LAUNCH_LOG")
+  [ "$launch" = "custom-agent --model cockpit/gpt-5.6-luna antigravity/help" ] \
+    || fail "unowned Antigravity argument changed the raw launch command"
+  pass "raw launch model parsing follows only --model ownership"
+}
+
 test_antigravity_preflight_error_is_secret_safe_and_refuses() {
   local rec id out status
   id=preflight-error-z19
@@ -1354,6 +1372,38 @@ test_resume_reuses_recorded_worktree_and_profile() {
   pass "--resume preserves commits and uncommitted changes while recording the actual profile"
 }
 
+test_resume_raw_launch_requires_explicit_harness_before_cleanup() {
+  local rec id out status meta
+  id=resume-raw-z34
+  rec=$(make_spawn_case resume-raw claude "$id")
+  read_case_record "$rec"
+  meta="$HOME_DIR/state/$id.meta"
+  {
+    printf 'window=firstmate:fm-%s\n' "$id"
+    printf 'endpoint_task_id=%s\n' "$id"
+    printf 'worktree=%s\n' "$WT_DIR"
+    printf 'project=%s\n' "$PROJ_DIR"
+    printf 'harness=claude\n'
+    printf 'raw_launch=1\n'
+    printf 'kind=ship\n'
+    printf 'model=default\n'
+    printf 'effort=default\n'
+  } > "$meta"
+  cp "$meta" "$CASE_DIR/meta.before"
+  FAKE_TMUX_WINDOW_FILE="$CASE_DIR/existing-window"
+  printf 'fm-%s\n' "$id" > "$FAKE_TMUX_WINDOW_FILE"
+
+  out=$(run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "$id" "$PROJ_DIR" --resume)
+  status=$?
+  expect_code 1 "$status" "raw launch resume without an explicit harness should refuse"
+  assert_contains "$out" "pass an explicit --harness" "raw resume refusal did not name the replacement path"
+  cmp -s "$meta" "$CASE_DIR/meta.before" || fail "raw resume refusal changed task metadata"
+  assert_present "$FAKE_TMUX_WINDOW_FILE" "raw resume refusal removed the recorded endpoint"
+  assert_absent "$LAUNCH_LOG.tmux" "raw resume refusal touched the recorded endpoint"
+  [ ! -s "$LAUNCH_LOG" ] || fail "raw resume refusal sent launch input"
+  pass "--resume preserves raw provenance before endpoint cleanup"
+}
+
 test_antigravity_preflight_signal_killed_checker_refuses() {
   local rec id out status
   id=preflight-sigkill-z32
@@ -1408,6 +1458,7 @@ test_antigravity_preflight_all_unusable_falls_back_before_metadata
 test_antigravity_preflight_raw_launch_uses_fallback
 test_antigravity_preflight_raw_launch_preserves_usable_explicit_model
 test_raw_launch_rejects_contradicting_model_owners
+test_raw_launch_ignores_unowned_antigravity_arguments
 test_antigravity_preflight_error_is_secret_safe_and_refuses
 test_antigravity_preflight_missing_and_non_executable_refuse
 test_antigravity_preflight_timeout_refuses
@@ -1421,6 +1472,7 @@ test_antigravity_preflight_embedded_raw_launch_model_uses_fallback
 test_antigravity_preflight_large_output_does_not_fail
 test_antigravity_preflight_space_in_home_path_succeeds
 test_resume_reuses_recorded_worktree_and_profile
+test_resume_raw_launch_requires_explicit_harness_before_cleanup
 test_antigravity_preflight_quoted_embedded_raw_launch_model_uses_fallback
 test_antigravity_preflight_signal_killed_checker_refuses
 
