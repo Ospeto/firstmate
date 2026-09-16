@@ -1497,7 +1497,7 @@ if [ "$RELAUNCH" -eq 1 ]; then
       exit 1
     }
   fi
-  if [ "$BACKEND" = herdr ]; then
+  if [ "$BACKEND" = herdr ] && [ "$RECOVER_MISSING_ENDPOINT" -eq 0 ]; then
     HERDR_SES=$(fm_meta_get "$RELAUNCH_META" herdr_session)
     HERDR_WORKSPACE_ID=$(fm_meta_get "$RELAUNCH_META" herdr_workspace_id)
     HERDR_TAB_ID=$(fm_meta_get "$RELAUNCH_META" herdr_tab_id)

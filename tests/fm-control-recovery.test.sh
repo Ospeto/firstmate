@@ -404,7 +404,75 @@ test_recover_refuses_when_endpoint_still_exists() {
   pass "missing-endpoint recovery: recover refuses when endpoint still exists in dead state"
 }
 
+test_herdr_recovery_launcher_placement() {
+  local dir pane out rc meta expected
+  for pane in w2:p1 ''; do
+    dir=$(new_case herdr-launcher)
+    add_ship_task_missing_endpoint "$dir" t1 claude
+    mkdir -p "$dir/home/config"
+    printf 'off\n' >"$dir/home/config/herdr-presentation-spaces"
+    cat >"$dir/home/state/t1.meta" <<EOF
+window=recovery:w9:p1
+endpoint_task_id=t1
+backend=herdr
+herdr_session=recovery
+herdr_workspace_id=ws9
+herdr_tab_id=w9
+herdr_pane_id=w9:p1
+worktree=$dir/wt
+project=$dir/proj
+harness=claude
+kind=ship
+mode=no-mistakes
+yolo=off
+spawn_gen=s_initial
+EOF
+    meta=$(cat "$dir/home/state/t1.meta")
+    cat >"$dir/fakebin/herdr" <<'SH'
+#!/usr/bin/env bash
+set -eu
+case "$1 ${2:-}" in
+  'status --json')
+    printf '%s\n' '{"client":{"version":"0.8.0","protocol":14},"server":{"running":true}}' ;;
+  'session list')
+    jq -n --arg socket "$FM_FAKE_DIR/socket" '{sessions:[{name:"recovery",running:true,socket_path:$socket}]}' ;;
+  'pane get')
+    if [ "$3" = w2:p1 ]; then
+      printf '%s\n' '{"result":{"pane":{"pane_id":"w2:p1","tab_id":"w2","workspace_id":"ws2"}}}'
+    else
+      printf '%s\n' '{"error":{"code":"pane_not_found"}}'
+      exit 1
+    fi ;;
+  'tab get')
+    [ "$3" = w2 ]
+    printf '%s\n' '{"result":{"tab":{"tab_id":"w2","workspace_id":"ws2"}}}' ;;
+  'workspace list')
+    printf '%s\n' '{"result":{"workspaces":[{"workspace_id":"ws1","label":"firstmate"},{"workspace_id":"ws2","label":"launcher"}]}}' ;;
+  'tab list') printf '%s\n' '{"result":{"tabs":[]}}' ;;
+  'tab create')
+    printf '%s\n' "$@" >"$FM_FAKE_DIR/create-request"
+    exit 1 ;;
+  *) exit 1 ;;
+esac
+SH
+    chmod +x "$dir/fakebin/herdr"
+    out=$(HERDR_PANE_ID="$pane" HERDR_SESSION=recovery HERDR_SOCKET_PATH="$dir/fake/socket" \
+      run_control "$dir" t1 recover --note 'preserve launcher placement')
+    rc=$?
+    expect_code 1 "$rc" "the injected tab creation failure must stop recovery"
+    [ -f "$dir/fake/create-request" ] || fail "recovery must reach endpoint creation: $out"
+    expected=ws1
+    [ -z "$pane" ] || expected=ws2
+    [ "$(cat "$dir/fake/create-request")" = "$(printf '%s\n' tab create --workspace "$expected" --cwd "$dir/proj" --label fm-t1 --no-focus --session recovery)" ] ||
+      fail "recovery must place the replacement using the launcher, not the missing worker"
+    [ "$(cat "$dir/home/state/t1.meta")" = "$meta" ] || fail "failed endpoint creation must preserve metadata"
+    [ "$(cat "$dir/wt/file1.txt")" = 'uncommitted file 1' ] || fail "recovery must preserve uncommitted work"
+  done
+  pass "Herdr recovery retains launcher placement and supports callers outside Herdr"
+}
+
 test_successful_recovery_verb
+test_herdr_recovery_launcher_placement
 test_recovery_aliases_refused
 test_live_endpoint_refusal
 test_live_process_in_worktree_refusal
