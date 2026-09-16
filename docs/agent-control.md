@@ -55,7 +55,7 @@ It is not deterministic across the verified adapters: codex, grok, and gemini re
 ## Transactional relaunch
 
 `relaunch` and `recover` are the verbs that change durable records, so each runs as a transaction with a journal at `state/<id>.control-relaunch`, the prior record preserved beside it, and a ship or scout's prior instructions preserved when a progress note is appended.
-`recover` (also invocable as `relaunch --recover-missing-endpoint` or `relaunch --missing-endpoint`) covers the missing-endpoint case without weakening ordinary relaunch's positive agent-free endpoint requirement.
+`recover` covers the missing-endpoint case without weakening ordinary relaunch's positive agent-free endpoint requirement.
 
 1. **Resolve the profile.**
    An explicit `--harness`, `--model`, or `--effort` wins.

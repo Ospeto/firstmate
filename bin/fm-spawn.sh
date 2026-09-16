@@ -42,7 +42,7 @@
 #   or herdr), refuses unless the endpoint's shell is sitting in the recorded
 #   worktree, and clears the previous harness's per-task wiring before arming
 #   the new incarnation.
-#   --recover-missing-endpoint (or --missing-endpoint) pairs with --relaunch to
+#   --recover-missing-endpoint pairs with --relaunch to
 #   start a replacement worker for an existing task whose recorded endpoint is
 #   confidently missing. It requires authoritative task metadata and a present
 #   existing worktree, verifies that the recorded endpoint is missing, proves
@@ -529,7 +529,7 @@ for a in "$@"; do
     KIND_SET=1
     ;;
   --relaunch) RELAUNCH=1 ;;
-  --recover-missing-endpoint | --missing-endpoint)
+  --recover-missing-endpoint)
     RECOVER_MISSING_ENDPOINT=1
     RELAUNCH=1
     ;;

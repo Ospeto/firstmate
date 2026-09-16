@@ -37,7 +37,7 @@ Do not sweep another home's endpoints or infer ownership from a matching window 
 
 Before relaunch, prove that no live agent still owns the recorded task and that the existing worktree remains available.
 Preserve its uncommitted changes and commits, keep the same task identity, and resume or relaunch the recorded harness in that existing worktree with the same brief plus a concise progress note.
-When the recorded endpoint is missing, use `bin/fm-control.sh <task-id> recover --note '<progress so far>'` (or `relaunch --recover-missing-endpoint`) to start a replacement worker in the preserved worktree without allocating a duplicate copy.
+When the recorded endpoint is missing, use `bin/fm-control.sh <task-id> recover --note '<progress so far>'` to start a replacement worker in the preserved worktree without allocating a duplicate copy.
 Do not use a fresh generic spawn while the recorded worktree is unaccounted for, because allocating another worktree can split one task across two copies.
 If the worktree or ownership cannot be reconciled safely, leave all state intact and report the task failed or blocked with the conflicting evidence.
 
@@ -68,7 +68,7 @@ Escalate in order:
 2. If the crewmate is waiting on a question its brief already answers, answer in one line via `FM_HOME=<this-firstmate-home> bin/fm-send.sh` from an active firstmate session unless `FM_HOME` is already set to the active firstmate home.
 3. If the crewmate is confused or looping, interrupt with `FM_HOME=<this-firstmate-home> bin/fm-control.sh <task-id> interrupt`, then redirect with one corrective line through `fm-send`.
 4. If the crewmate is genuinely wedged after redirection, relaunch it with `FM_HOME=<this-firstmate-home> bin/fm-control.sh <task-id> relaunch --note '<progress so far>'`, which stops the agent, carries the brief plus that note into a replacement in the same local copy, and restores the prior record if the replacement cannot start.
-   If its recorded endpoint is missing, recover it with `FM_HOME=<this-firstmate-home> bin/fm-control.sh <task-id> recover --note '<progress so far>'` (or `relaunch --recover-missing-endpoint`), which verifies the endpoint is missing and worktree unowned before starting a replacement in the same copy without a new treehouse slot.
+   If its recorded endpoint is missing, recover it with `FM_HOME=<this-firstmate-home> bin/fm-control.sh <task-id> recover --note '<progress so far>'`, which verifies the endpoint is missing and worktree unowned before starting a replacement in the same copy without a new treehouse slot.
    Pass `--harness`, `--model`, or `--effort` on that same command when the worker should come back on a different runtime.
    Genuine wedging means looping, unresponsive, repeating the same obstacle, or truly dead.
    A low context reading is not wedging; modern harnesses auto-compact and keep going.

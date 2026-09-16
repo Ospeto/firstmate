@@ -5,14 +5,14 @@
 # whose recorded endpoint is missing:
 #   1. Successful recovery via `fm-control.sh <task-id> recover` preserves
 #      uncommitted files and task identity while creating a replacement worker.
-#   2. Successful recovery via `fm-control.sh <task-id> relaunch --recover-missing-endpoint`.
+#   2. Redundant recovery flags are refused without changing task state.
 #   3. Live endpoint ownership refusal: refuses when the recorded endpoint is alive.
 #   4. Live process ownership refusal: refuses when an independent process has cwd in the worktree.
 #   5. Ambiguous ownership refusal: refuses when the process scan fails (lsof error).
 #   6. Shared ownership refusal: refuses when another task's metadata records the same worktree.
 #   7. Worktree disappearance: refuses when the recorded worktree is missing.
 #   8. Concurrent ownership change: refuses when metadata changes concurrently.
-#   9. Ordinary relaunch invariant: refuses without --recover-missing-endpoint when endpoint is missing.
+#   9. Ordinary relaunch invariant: refuses when endpoint is missing.
 #  10. Endpoint still exists: refuses recover when recorded endpoint is dead (directs to ordinary relaunch).
 set -u
 
@@ -223,19 +223,33 @@ test_successful_recovery_verb() {
   pass "missing-endpoint recovery: successful recovery via recover verb preserves work and publishes replacement"
 }
 
-# --- Test 2: Successful missing-endpoint recovery via 'relaunch --recover-missing-endpoint'
-test_successful_recovery_relaunch_flag() {
-  local dir out rc wt
+test_recovery_aliases_refused() {
+  local dir out rc flag verb meta brief
   dir=$(new_case recover-flag)
   add_ship_task_missing_endpoint "$dir" t1 claude
-  wt="$dir/wt"
+  meta=$(cat "$dir/home/state/t1.meta")
+  brief=$(cat "$dir/home/data/t1/brief.md")
 
-  out=$(run_control "$dir" t1 relaunch --recover-missing-endpoint --note "recovering via flag")
+  for verb in relaunch recover; do
+    for flag in --recover-missing-endpoint --missing-endpoint; do
+      out=$(run_control "$dir" t1 "$verb" "$flag" --note "recovering via flag")
+      rc=$?
+      expect_code 1 "$rc" "$verb $flag must be refused"
+      assert_contains "$out" "unexpected argument '$flag'" "removed public flags must be rejected"
+    done
+  done
+
+  out=$(env PATH="$dir/fakebin:$PATH" FM_HOME="$dir/home" FM_FAKE_DIR="$dir/fake" \
+    FM_SPAWN_NO_GUARD=1 "$SPAWN" t1 --relaunch --missing-endpoint 2>&1)
   rc=$?
-  expect_code 0 "$rc" "recovery via relaunch flag should succeed"
-  assert_contains "$out" "recovered t1 harness=claude" "output should announce recovery"
-  [ -f "$wt/file1.txt" ] || fail "uncommitted file1.txt should be preserved"
-  pass "missing-endpoint recovery: successful recovery via relaunch --recover-missing-endpoint"
+  expect_code 1 "$rc" "spawn's shortened recovery flag must be refused"
+  assert_contains "$out" "--relaunch takes the task id only" "removed spawn alias must not select recovery"
+  [ "$(cat "$dir/home/state/t1.meta")" = "$meta" ] || fail "refused aliases must preserve metadata"
+  [ "$(cat "$dir/home/data/t1/brief.md")" = "$brief" ] || fail "refused aliases must preserve the brief"
+  [ ! -e "$dir/home/state/t1.control-relaunch" ] || fail "refused aliases must not start a transaction"
+  [ ! -s "$dir/fake/windows" ] || fail "refused aliases must not allocate an endpoint"
+  [ ! -s "$dir/fake/literal" ] || fail "refused aliases must not launch a worker"
+  pass "missing-endpoint recovery: redundant aliases are refused without changing task state"
 }
 
 # --- Test 3: Live endpoint ownership refusal --------------------------------
@@ -391,7 +405,7 @@ test_recover_refuses_when_endpoint_still_exists() {
 }
 
 test_successful_recovery_verb
-test_successful_recovery_relaunch_flag
+test_recovery_aliases_refused
 test_live_endpoint_refusal
 test_live_process_in_worktree_refusal
 test_ambiguous_ownership_lsof_failure_refusal

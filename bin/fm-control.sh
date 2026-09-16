@@ -10,7 +10,6 @@
 #        fm-control.sh <task-id> recover [--harness <name>] [--model <name>]
 #                                        [--effort <level>]
 #                                        (--note <text> | --note-file <path>)
-#                                        (or: relaunch --recover-missing-endpoint)
 #
 # Why this exists, and how it differs from fm-send.sh. bin/fm-send.sh is the
 # DATA plane: conversational text for the agent to read, always routing-marked
@@ -64,8 +63,7 @@
 #              no live process or worker owns the worktree, rejects shared,
 #              changed, or ambiguous ownership, and delegates replacement to
 #              bin/fm-spawn.sh --relaunch --recover-missing-endpoint without
-#              allocating a fresh treehouse slot. Also invocable as
-#              'relaunch --recover-missing-endpoint' or 'relaunch --missing-endpoint'.
+#              allocating a fresh treehouse slot.
 #
 # Teardown and discard are NOT verbs here and never will be. `exit` stops an
 # agent and preserves everything else; removing a worktree, killing an
@@ -256,7 +254,6 @@ for control_arg in "$@"; do
     continue
   fi
   case "$control_arg" in
-  --recover-missing-endpoint | --missing-endpoint) RECOVER_MISSING_ENDPOINT=1 ;;
   --harness) control_want_value=harness ;;
   --harness=*)
     NEW_HARNESS=${control_arg#--harness=}
