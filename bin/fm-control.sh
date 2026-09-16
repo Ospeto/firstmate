@@ -7,6 +7,10 @@
 #        fm-control.sh <task-id> relaunch [--harness <name>] [--model <name>]
 #                                         [--effort <level>]
 #                                         (--note <text> | --note-file <path>)
+#        fm-control.sh <task-id> recover [--harness <name>] [--model <name>]
+#                                        [--effort <level>]
+#                                        (--note <text> | --note-file <path>)
+#                                        (or: relaunch --recover-missing-endpoint)
 #
 # Why this exists, and how it differs from fm-send.sh. bin/fm-send.sh is the
 # DATA plane: conversational text for the agent to read, always routing-marked
@@ -52,6 +56,16 @@
 #              the prior durable record in place and reports the concrete
 #              state; it never leaves a half-transitioned task claiming to be
 #              running.
+#   recover    Transactionally replace a dead agent whose recorded endpoint is
+#              missing, in the PRESERVED worktree and SAME task identity, on the
+#              same or a newly chosen harness/model/effort. Ordinary relaunch
+#              refuses if the recorded endpoint is missing; recover verifies
+#              that the recorded endpoint is missing, proves independently that
+#              no live process or worker owns the worktree, rejects shared,
+#              changed, or ambiguous ownership, and delegates replacement to
+#              bin/fm-spawn.sh --relaunch --recover-missing-endpoint without
+#              allocating a fresh treehouse slot. Also invocable as
+#              'relaunch --recover-missing-endpoint' or 'relaunch --missing-endpoint'.
 #
 # Teardown and discard are NOT verbs here and never will be. `exit` stops an
 # agent and preserves everything else; removing a worktree, killing an
@@ -136,6 +150,8 @@ DATA="${FM_DATA_OVERRIDE:-$FM_HOME/data}"
 . "$SCRIPT_DIR/fm-pr-lib.sh"
 # shellcheck source=bin/fm-wake-lib.sh
 . "$SCRIPT_DIR/fm-wake-lib.sh"
+# shellcheck source=bin/fm-process-lib.sh
+. "$SCRIPT_DIR/fm-process-lib.sh"
 
 POLL=${FM_CONTROL_POLL:-0.5}
 SETTLE_WAIT=${FM_CONTROL_SETTLE_WAIT:-5}
@@ -197,6 +213,10 @@ MODEL_SET=0
 EFFORT_SET=0
 NOTE=
 NOTE_SET=0
+RECOVER_MISSING_ENDPOINT=0
+if [ "$VERB" = recover ]; then
+  RECOVER_MISSING_ENDPOINT=1
+fi
 control_want_value=
 for control_arg in "$@"; do
   if [ -n "$control_want_value" ]; then
@@ -218,6 +238,7 @@ for control_arg in "$@"; do
     continue
   fi
   case "$control_arg" in
+    --recover-missing-endpoint|--missing-endpoint) RECOVER_MISSING_ENDPOINT=1 ;;
     --harness) control_want_value=harness ;;
     --harness=*) NEW_HARNESS=${control_arg#--harness=}; HARNESS_SET=1 ;;
     --model) control_want_value=model ;;
@@ -240,7 +261,7 @@ if [ -n "$control_want_value" ]; then
   die "--$control_want_value requires a value"
 fi
 
-if [ "$VERB" != relaunch ]; then
+if [ "$VERB" != relaunch ] && [ "$VERB" != recover ]; then
   [ "$HARNESS_SET" = 0 ] && [ "$MODEL_SET" = 0 ] && [ "$EFFORT_SET" = 0 ] && [ "$NOTE_SET" = 0 ] \
     || die "--harness, --model, --effort, and --note apply to 'relaunch' only"
 fi
@@ -323,13 +344,11 @@ busy_verdict() {
   fm_busy_classify_meta "$META" "$ID" "$STATE"
 }
 
-# wait_agent_state <wanted...> <timeout>: poll until agent_state prints one of
-# the wanted values. Prints the final observed state; returns 0 on a match.
-wait_agent_state() {  # <timeout> <wanted>...
-  local timeout=$1 state want elapsed=0
-  shift
+wait_agent_state_target() {  # <backend> <target> <timeout> <wanted>...
+  local backend=$1 target=$2 timeout=$3 state want elapsed=0
+  shift 3
   while :; do
-    state=$(agent_state)
+    state=$(fm_backend_agent_state "$backend" "$target")
     for want in "$@"; do
       if [ "$state" = "$want" ]; then
         printf '%s' "$state"
@@ -342,6 +361,14 @@ wait_agent_state() {  # <timeout> <wanted>...
   done
   printf '%s' "$state"
   return 1
+}
+
+# wait_agent_state <wanted...> <timeout>: poll until agent_state prints one of
+# the wanted values. Prints the final observed state; returns 0 on a match.
+wait_agent_state() {  # <timeout> <wanted>...
+  local timeout=$1
+  shift
+  wait_agent_state_target "$BACKEND" "$T" "$timeout" "$@"
 }
 
 require_state_verified_backend() {  # <verb>
@@ -689,9 +716,13 @@ resolve_relaunch_profile() {
 # CHECKPOINT_LINES with the journal lines describing what it proved, and
 # refuses outright when any of it cannot be established.
 CHECKPOINT_LINES=()
+META_SNAPSHOT_SPAWN_GEN=
+META_SNAPSHOT_WT=
 safe_checkpoint() {
   local wt_real wt_top wt_top_real head head_ref head_ref_status status_output dirty children marker child_meta
   CHECKPOINT_LINES=()
+  META_SNAPSHOT_SPAWN_GEN=$(fm_meta_get "$META" spawn_gen 2>/dev/null || true)
+  META_SNAPSHOT_WT=$(fm_meta_get "$META" worktree 2>/dev/null || true)
   [ -n "$WT" ] || die "task $ID has no recorded worktree; refusing to relaunch without a recorded local copy to preserve"
   [ -d "$WT" ] || die "task $ID's recorded worktree $WT is missing; refusing to relaunch and lose track of its work"
   wt_real=$(cd "$WT" 2>/dev/null && pwd -P) || die "task $ID's recorded worktree $WT cannot be resolved"
@@ -722,6 +753,33 @@ safe_checkpoint() {
     dirty=no
   fi
   CHECKPOINT_LINES+=("worktree_head=$head" "worktree_dirty=$dirty")
+  if [ "$RECOVER_MISSING_ENDPOINT" = 1 ]; then
+    local ep_state pids other_meta other_id other_wt other_wt_real
+    ep_state=$(agent_state)
+    case "$ep_state" in
+      missing) ;;
+      alive) die "task $ID's recorded endpoint reads 'alive'; refusing missing-endpoint recovery because a live agent still owns the recorded endpoint" ;;
+      dead) die "task $ID's recorded endpoint still exists (state: dead); use ordinary relaunch instead of missing-endpoint recovery" ;;
+      *) die "task $ID's recorded endpoint reads '$ep_state' rather than a positively missing endpoint; refusing recovery on ambiguous endpoint state" ;;
+    esac
+    if ! pids=$(fm_process_pids_with_cwd_under "$WT"); then
+      die "refusing recovery: cannot verify absence of live processes under $WT"
+    fi
+    if [ -n "$pids" ]; then
+      die "refusing recovery: live process(es) ($pids) still have current working directory in $WT"
+    fi
+    for other_meta in "$STATE"/*.meta; do
+      [ -f "$other_meta" ] || continue
+      other_id=$(basename "$other_meta" .meta)
+      [ "$other_id" != "$ID" ] || continue
+      other_wt=$(fm_meta_get "$other_meta" worktree 2>/dev/null || true)
+      [ -n "$other_wt" ] || continue
+      other_wt_real=$(cd "$other_wt" 2>/dev/null && pwd -P || true)
+      if [ -n "$other_wt_real" ] && [ "$other_wt_real" = "$wt_real" ]; then
+        die "refusing recovery: task $other_id also records worktree $WT; refusing shared worktree recovery"
+      fi
+    done
+  fi
   if [ "$KIND" = secondmate ]; then
     # A secondmate's own crewmates outlive its relaunch: they run in their own
     # endpoints, and the relaunched secondmate reconciles them from its home's
@@ -821,17 +879,33 @@ do_relaunch() {
   record_note
   journal_write noted "${CHECKPOINT_LINES[@]}" "$note_line"
 
-  journal_write stopping "${CHECKPOINT_LINES[@]}" "$note_line"
-  exit_result=$(do_exit)
-  journal_write exited "${CHECKPOINT_LINES[@]}" "$note_line" "exit_result=$exit_result"
+  if [ "$RECOVER_MISSING_ENDPOINT" = 0 ]; then
+    journal_write stopping "${CHECKPOINT_LINES[@]}" "$note_line"
+    exit_result=$(do_exit)
+    journal_write exited "${CHECKPOINT_LINES[@]}" "$note_line" "exit_result=$exit_result"
+  else
+    state=$(agent_state)
+    [ "$state" = missing ] || die "task $ID's endpoint changed to '$state' during recovery; refusing to proceed"
+    current_spawn_gen=$(fm_meta_get "$META" spawn_gen 2>/dev/null || true)
+    current_wt=$(fm_meta_get "$META" worktree 2>/dev/null || true)
+    [ "$current_spawn_gen" = "$META_SNAPSHOT_SPAWN_GEN" ] && [ "$current_wt" = "$META_SNAPSHOT_WT" ] \
+      || die "task $ID's metadata changed concurrently during recovery; refusing to proceed"
+    exit_result=endpoint-missing-confirmed
+    journal_write exited "${CHECKPOINT_LINES[@]}" "$note_line" "exit_result=$exit_result" "recovery=missing-endpoint"
+  fi
 
   # The launch owner (fm-spawn --relaunch) clears the previous incarnation's
   # per-task harness wiring before arming the new one, so nothing to do here.
   RELAUNCH_TX="${BASHPID:-$$}.$(date -u +%Y%m%dT%H%M%SZ).$RANDOM"
-  journal_write launching "${CHECKPOINT_LINES[@]}" "$note_line" "relaunch_tx=$RELAUNCH_TX"
+  local -a journal_launch_extra=("${CHECKPOINT_LINES[@]}" "$note_line" "relaunch_tx=$RELAUNCH_TX")
+  [ "$RECOVER_MISSING_ENDPOINT" = 0 ] || journal_launch_extra+=("recovery=missing-endpoint")
+  journal_write launching "${journal_launch_extra[@]}"
   spawn_args=("$ID" --relaunch --harness "$TARGET_HARNESS")
   [ "$TARGET_MODEL" = default ] || spawn_args+=(--model "$TARGET_MODEL")
   [ "$TARGET_EFFORT" = default ] || spawn_args+=(--effort "$TARGET_EFFORT")
+  if [ "$RECOVER_MISSING_ENDPOINT" = 1 ]; then
+    spawn_args+=(--recover-missing-endpoint)
+  fi
   if FM_CONTROL_RELAUNCH_TX="$RELAUNCH_TX" \
       "$SCRIPT_DIR/fm-spawn.sh" "${spawn_args[@]}" >/dev/null; then
     RELAUNCH_META_PUBLISHED=1
@@ -841,14 +915,31 @@ do_relaunch() {
     die "the replacement agent for $ID could not be launched on $TARGET_HARNESS"
   fi
 
-  state=$(wait_agent_state "$LAUNCH_WAIT" alive) || {
+  local wait_backend wait_target
+  if [ "$RECOVER_MISSING_ENDPOINT" = 1 ]; then
+    wait_backend=$(fm_meta_get "$META" backend)
+    [ -n "$wait_backend" ] || wait_backend=tmux
+    wait_target=$(fm_backend_resolve_selector "$wait_backend" "$META" 2>/dev/null || true)
+    [ -n "$wait_target" ] || wait_target=$(fm_meta_get "$META" window)
+  else
+    wait_backend=$BACKEND
+    wait_target=$T
+  fi
+
+  state=$(wait_agent_state_target "$wait_backend" "$wait_target" "$LAUNCH_WAIT" alive) || {
     die "the replacement agent for $ID did not come up within ${LAUNCH_WAIT}s (endpoint reads '$state')"
   }
   RELAUNCH_AGENT_CONFIRMED=1
 
-  journal_write complete "${CHECKPOINT_LINES[@]}" "$note_line" "exit_result=$exit_result"
+  local -a journal_complete_extra=("${CHECKPOINT_LINES[@]}" "$note_line" "exit_result=$exit_result")
+  [ "$RECOVER_MISSING_ENDPOINT" = 0 ] || journal_complete_extra+=("recovery=missing-endpoint")
+  journal_write complete "${journal_complete_extra[@]}"
   RELAUNCH_ACTIVE=0
-  echo "relaunched $ID harness=$TARGET_HARNESS from=$PRIOR_RECORDED_HARNESS model=$TARGET_MODEL effort=$TARGET_EFFORT backend=$BACKEND endpoint=$T worktree=$WT"
+  if [ "$RECOVER_MISSING_ENDPOINT" = 1 ]; then
+    echo "recovered $ID harness=$TARGET_HARNESS from=$PRIOR_RECORDED_HARNESS model=$TARGET_MODEL effort=$TARGET_EFFORT backend=$wait_backend endpoint=$wait_target worktree=$WT"
+  else
+    echo "relaunched $ID harness=$TARGET_HARNESS from=$PRIOR_RECORDED_HARNESS model=$TARGET_MODEL effort=$TARGET_EFFORT backend=$BACKEND endpoint=$T worktree=$WT"
+  fi
 }
 
 # --- verbs ------------------------------------------------------------------
@@ -874,7 +965,7 @@ case "$VERB" in
     result=$(do_exit)
     echo "$result $ID harness=$HARNESS backend=$BACKEND endpoint=$T worktree=$WT"
     ;;
-  relaunch)
+  relaunch|recover)
     do_relaunch
     ;;
 esac
