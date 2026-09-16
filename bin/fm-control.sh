@@ -116,7 +116,10 @@ usage() {
 }
 
 case "${1:-}" in
-  -h|--help) usage; exit 0 ;;
+-h | --help)
+  usage
+  exit 0
+  ;;
 esac
 
 # shellcheck source=bin/fm-gate-refuse-lib.sh
@@ -159,7 +162,7 @@ EXIT_WAIT=${FM_CONTROL_EXIT_WAIT:-30}
 LAUNCH_WAIT=${FM_CONTROL_LAUNCH_WAIT:-90}
 EXIT_RETRIES=${FM_CONTROL_EXIT_RETRIES:-3}
 
-die() {  # <message>
+die() { # <message>
   echo "error: $1" >&2
   exit 1
 }
@@ -171,8 +174,8 @@ RELAUNCH_PHASE=start
 
 control_cleanup() {
   local status=$?
-  if [ "$RELAUNCH_ACTIVE" = 1 ] \
-     && declare -F relaunch_rollback >/dev/null 2>&1; then
+  if [ "$RELAUNCH_ACTIVE" = 1 ] &&
+    declare -F relaunch_rollback >/dev/null 2>&1; then
     relaunch_rollback || true
   fi
   if [ "$CONTROL_LOCK_HELD" = 1 ]; then
@@ -189,7 +192,10 @@ control_cleanup() {
 
 RAW_ID=${1:-}
 VERB=${2:-}
-[ -n "$RAW_ID" ] && [ -n "$VERB" ] || { usage >&2; exit 2; }
+[ -n "$RAW_ID" ] && [ -n "$VERB" ] || {
+  usage >&2
+  exit 2
+}
 shift 2
 
 if ! fm_control_verb_allowed "$VERB"; then
@@ -221,39 +227,63 @@ control_want_value=
 for control_arg in "$@"; do
   if [ -n "$control_want_value" ]; then
     case "$control_arg" in
-      --*) die "--$control_want_value requires a value" ;;
+    --*) die "--$control_want_value requires a value" ;;
     esac
     case "$control_want_value" in
-      harness) NEW_HARNESS=$control_arg; HARNESS_SET=1 ;;
-      model) NEW_MODEL=$control_arg; MODEL_SET=1 ;;
-      effort) NEW_EFFORT=$control_arg; EFFORT_SET=1 ;;
-      note) NOTE=$control_arg; NOTE_SET=1 ;;
-      note_file)
-        [ -f "$control_arg" ] || die "--note-file '$control_arg' is not a readable file"
-        NOTE=$(cat "$control_arg")
-        NOTE_SET=1
-        ;;
+    harness)
+      NEW_HARNESS=$control_arg
+      HARNESS_SET=1
+      ;;
+    model)
+      NEW_MODEL=$control_arg
+      MODEL_SET=1
+      ;;
+    effort)
+      NEW_EFFORT=$control_arg
+      EFFORT_SET=1
+      ;;
+    note)
+      NOTE=$control_arg
+      NOTE_SET=1
+      ;;
+    note_file)
+      [ -f "$control_arg" ] || die "--note-file '$control_arg' is not a readable file"
+      NOTE=$(cat "$control_arg")
+      NOTE_SET=1
+      ;;
     esac
     control_want_value=
     continue
   fi
   case "$control_arg" in
-    --recover-missing-endpoint|--missing-endpoint) RECOVER_MISSING_ENDPOINT=1 ;;
-    --harness) control_want_value=harness ;;
-    --harness=*) NEW_HARNESS=${control_arg#--harness=}; HARNESS_SET=1 ;;
-    --model) control_want_value=model ;;
-    --model=*) NEW_MODEL=${control_arg#--model=}; MODEL_SET=1 ;;
-    --effort) control_want_value=effort ;;
-    --effort=*) NEW_EFFORT=${control_arg#--effort=}; EFFORT_SET=1 ;;
-    --note) control_want_value=note ;;
-    --note=*) NOTE=${control_arg#--note=}; NOTE_SET=1 ;;
-    --note-file) control_want_value=note_file ;;
-    --note-file=*)
-      [ -f "${control_arg#--note-file=}" ] || die "--note-file '${control_arg#--note-file=}' is not a readable file"
-      NOTE=$(cat "${control_arg#--note-file=}")
-      NOTE_SET=1
-      ;;
-    *) die "unexpected argument '$control_arg'" ;;
+  --recover-missing-endpoint | --missing-endpoint) RECOVER_MISSING_ENDPOINT=1 ;;
+  --harness) control_want_value=harness ;;
+  --harness=*)
+    NEW_HARNESS=${control_arg#--harness=}
+    HARNESS_SET=1
+    ;;
+  --model) control_want_value=model ;;
+  --model=*)
+    NEW_MODEL=${control_arg#--model=}
+    MODEL_SET=1
+    ;;
+  --effort) control_want_value=effort ;;
+  --effort=*)
+    NEW_EFFORT=${control_arg#--effort=}
+    EFFORT_SET=1
+    ;;
+  --note) control_want_value=note ;;
+  --note=*)
+    NOTE=${control_arg#--note=}
+    NOTE_SET=1
+    ;;
+  --note-file) control_want_value=note_file ;;
+  --note-file=*)
+    [ -f "${control_arg#--note-file=}" ] || die "--note-file '${control_arg#--note-file=}' is not a readable file"
+    NOTE=$(cat "${control_arg#--note-file=}")
+    NOTE_SET=1
+    ;;
+  *) die "unexpected argument '$control_arg'" ;;
   esac
 done
 if [ -n "$control_want_value" ]; then
@@ -262,21 +292,21 @@ if [ -n "$control_want_value" ]; then
 fi
 
 if [ "$VERB" != relaunch ] && [ "$VERB" != recover ]; then
-  [ "$HARNESS_SET" = 0 ] && [ "$MODEL_SET" = 0 ] && [ "$EFFORT_SET" = 0 ] && [ "$NOTE_SET" = 0 ] \
-    || die "--harness, --model, --effort, and --note apply to 'relaunch' only"
+  [ "$HARNESS_SET" = 0 ] && [ "$MODEL_SET" = 0 ] && [ "$EFFORT_SET" = 0 ] && [ "$NOTE_SET" = 0 ] ||
+    die "--harness, --model, --effort, and --note apply to 'relaunch' only"
 fi
 [ "$HARNESS_SET" = 0 ] || [ -n "$NEW_HARNESS" ] || die "--harness requires a non-empty value"
 [ "$MODEL_SET" = 0 ] || [ -n "$NEW_MODEL" ] || die "--model requires a non-empty value"
 [ "$EFFORT_SET" = 0 ] || [ -n "$NEW_EFFORT" ] || die "--effort requires a non-empty value"
 case "$NEW_EFFORT" in
-  ''|default|low|medium|high|xhigh|max) ;;
-  *) die "--effort must be one of default, low, medium, high, xhigh, max" ;;
+'' | default | low | medium | high | xhigh | max) ;;
+*) die "--effort must be one of default, low, medium, high, xhigh, max" ;;
 esac
 
 # --- exact task-id resolution ----------------------------------------------
 
 case "$RAW_ID" in
-  *:*) die "'$RAW_ID' is an explicit backend endpoint; fm-control accepts an exact task id only, so a lifecycle command can never land on an endpoint this home does not own" ;;
+*:*) die "'$RAW_ID' is an explicit backend endpoint; fm-control accepts an exact task id only, so a lifecycle command can never land on an endpoint this home does not own" ;;
 esac
 if ! fm_task_id_creation_valid "$RAW_ID"; then
   die "'$RAW_ID' is not a valid task id"
@@ -290,17 +320,17 @@ ID=$RAW_ID
 fm_lease_guard "$ID" "lifecycle control (fm-control)"
 CONTROL_LOCK="$STATE/.control-$ID.lock"
 trap control_cleanup EXIT
-fm_lock_try_acquire "$CONTROL_LOCK" \
-  || die "another lifecycle action is already running for task $ID"
+fm_lock_try_acquire "$CONTROL_LOCK" ||
+  die "another lifecycle action is already running for task $ID"
 CONTROL_LOCK_HELD=1
 META="$STATE/$ID.meta"
 if [ ! -f "$META" ]; then
   case "$RAW_ID" in
-    fm-*)
-      if [ -f "$STATE/${RAW_ID#fm-}.meta" ]; then
-        die "'$RAW_ID' is a window label, not a task id; pass the exact task id '${RAW_ID#fm-}'"
-      fi
-      ;;
+  fm-*)
+    if [ -f "$STATE/${RAW_ID#fm-}.meta" ]; then
+      die "'$RAW_ID' is a window label, not a task id; pass the exact task id '${RAW_ID#fm-}'"
+    fi
+    ;;
   esac
   die "no task '$ID' in $STATE (fm-control resolves an exact task id only)"
 fi
@@ -327,10 +357,10 @@ KIND=$(fm_meta_get "$META" kind)
 WT=$(fm_meta_get "$META" worktree)
 [ -n "$KIND" ] || KIND=ship
 
-HARNESS=$(fm_control_harness_family "$RECORDED_HARNESS") \
-  || die "task $ID records harness '${RECORDED_HARNESS:-none}', which has no verified control mechanics; fm-control refuses to guess an interrupt key or exit command"
-fm_control_harness_supported "$HARNESS" \
-  || die "task $ID records harness '${RECORDED_HARNESS:-none}', which has no verified control mechanics; fm-control refuses to guess an interrupt key or exit command"
+HARNESS=$(fm_control_harness_family "$RECORDED_HARNESS") ||
+  die "task $ID records harness '${RECORDED_HARNESS:-none}', which has no verified control mechanics; fm-control refuses to guess an interrupt key or exit command"
+fm_control_harness_supported "$HARNESS" ||
+  die "task $ID records harness '${RECORDED_HARNESS:-none}', which has no verified control mechanics; fm-control refuses to guess an interrupt key or exit command"
 
 fm_backend_validate "$BACKEND" || exit 1
 
@@ -344,7 +374,7 @@ busy_verdict() {
   fm_busy_classify_meta "$META" "$ID" "$STATE"
 }
 
-wait_agent_state_target() {  # <backend> <target> <timeout> <wanted>...
+wait_agent_state_target() { # <backend> <target> <timeout> <wanted>...
   local backend=$1 target=$2 timeout=$3 state want elapsed=0
   shift 3
   while :; do
@@ -365,13 +395,13 @@ wait_agent_state_target() {  # <backend> <target> <timeout> <wanted>...
 
 # wait_agent_state <wanted...> <timeout>: poll until agent_state prints one of
 # the wanted values. Prints the final observed state; returns 0 on a match.
-wait_agent_state() {  # <timeout> <wanted>...
+wait_agent_state() { # <timeout> <wanted>...
   local timeout=$1
   shift
   wait_agent_state_target "$BACKEND" "$T" "$timeout" "$@"
 }
 
-require_state_verified_backend() {  # <verb>
+require_state_verified_backend() { # <verb>
   fm_control_backend_state_verified "$BACKEND" && return 0
   die "task $ID runs on the $BACKEND backend, which has no recovery-grade agent-state classifier, so '$1' cannot prove the agent actually stopped; refusing rather than reporting an unproven transition as done"
 }
@@ -386,18 +416,18 @@ send_interrupt_keys() {
   key=$(fm_control_interrupt_key "$HARNESS")
   repeat=$(fm_control_interrupt_repeat "$HARNESS")
   clear=$(fm_control_interrupt_clear_key "$HARNESS")
-  fm_control_backend_supports_key "$BACKEND" "$key" \
-    || die "harness $HARNESS interrupts with $key, which the $BACKEND backend cannot deliver; refusing to send a different key"
-  [ -z "$clear" ] || fm_control_backend_supports_key "$BACKEND" "$clear" \
-    || die "harness $HARNESS needs $clear to clear its composer after an interrupt, which the $BACKEND backend cannot deliver; refusing to leave the cancelled prompt where the next submitted line would concatenate onto it"
+  fm_control_backend_supports_key "$BACKEND" "$key" ||
+    die "harness $HARNESS interrupts with $key, which the $BACKEND backend cannot deliver; refusing to send a different key"
+  [ -z "$clear" ] || fm_control_backend_supports_key "$BACKEND" "$clear" ||
+    die "harness $HARNESS needs $clear to clear its composer after an interrupt, which the $BACKEND backend cannot deliver; refusing to leave the cancelled prompt where the next submitted line would concatenate onto it"
   while [ "$i" -lt "$repeat" ]; do
-    fm_backend_send_key "$BACKEND" "$T" "$key" "$LABEL" \
-      || die "interrupt key $key was not delivered to task $ID on $BACKEND"
+    fm_backend_send_key "$BACKEND" "$T" "$key" "$LABEL" ||
+      die "interrupt key $key was not delivered to task $ID on $BACKEND"
     i=$((i + 1))
     [ "$i" -ge "$repeat" ] || sleep 0.2
   done
-  [ -z "$clear" ] || fm_backend_send_key "$BACKEND" "$T" "$clear" "$LABEL" \
-    || die "interrupt key $key reached task $ID, but $clear did not, so its composer still holds the cancelled prompt; clear it before the next lifecycle action"
+  [ -z "$clear" ] || fm_backend_send_key "$BACKEND" "$T" "$clear" "$LABEL" ||
+    die "interrupt key $key reached task $ID, but $clear did not, so its composer still holds the cancelled prompt; clear it before the next lifecycle action"
 }
 
 prepare_interrupt_ack() {
@@ -405,25 +435,34 @@ prepare_interrupt_ack() {
   INTERRUPT_ACK_LOG=
   INTERRUPT_ACK_RUN=
   case "$INTERRUPT_ACK_SOURCE" in
-    muse-session-terminal)
-      INTERRUPT_ACK_LOG=$(fm_busy_muse_session_log "$STATE" "$ID" 2>/dev/null || true)
-      [ -n "$INTERRUPT_ACK_LOG" ] || return 0
-      INTERRUPT_ACK_RUN=$(fm_busy_muse_active_run_id "$INTERRUPT_ACK_LOG" 2>/dev/null || true)
-      ;;
+  muse-session-terminal)
+    INTERRUPT_ACK_LOG=$(fm_busy_muse_session_log "$STATE" "$ID" 2>/dev/null || true)
+    [ -n "$INTERRUPT_ACK_LOG" ] || return 0
+    INTERRUPT_ACK_RUN=$(fm_busy_muse_active_run_id "$INTERRUPT_ACK_LOG" 2>/dev/null || true)
+    ;;
   esac
 }
 
 interrupt_cancel_claim() {
   local elapsed=0 terminal=
   case "$INTERRUPT_ACK_SOURCE:$INTERRUPT_ACK_RUN" in
-    muse-session-terminal:?*) ;;
-    *) printf 'unconfirmed'; return 0 ;;
+  muse-session-terminal:?*) ;;
+  *)
+    printf 'unconfirmed'
+    return 0
+    ;;
   esac
   while :; do
     terminal=$(fm_busy_muse_run_terminal "$INTERRUPT_ACK_LOG" "$INTERRUPT_ACK_RUN" 2>/dev/null || true)
     case "$terminal" in
-      cancelled) printf 'confirmed'; return 0 ;;
-      ?*) printf 'unconfirmed'; return 0 ;;
+    cancelled)
+      printf 'confirmed'
+      return 0
+      ;;
+    ?*)
+      printf 'unconfirmed'
+      return 0
+      ;;
     esac
     awk -v e="$elapsed" -v t="$SETTLE_WAIT" 'BEGIN{exit !(e < t)}' || break
     sleep "$POLL"
@@ -444,15 +483,15 @@ deliver_interrupt() {
 
 verify_interrupt_running() {
   local proof after
-  fm_backend_target_exists "$BACKEND" "$T" "$LABEL" \
-    || die "task $ID's endpoint disappeared while interrupting it; no further control action is safe"
+  fm_backend_target_exists "$BACKEND" "$T" "$LABEL" ||
+    die "task $ID's endpoint disappeared while interrupting it; no further control action is safe"
   proof=endpoint
   if fm_control_backend_state_verified "$BACKEND"; then
     # An interrupt cancels a turn; it must never have stopped the agent. This
     # is the postcondition that separates a landed interrupt from an accident.
     after=$(agent_state)
-    [ "$after" = alive ] \
-      || die "task $ID's agent is '$after' after its interrupt key; an interrupt must leave the agent running"
+    [ "$after" = alive ] ||
+      die "task $ID's agent is '$after' after its interrupt key; an interrupt must leave the agent running"
     proof=agent-alive
   fi
   printf '%s' "$proof"
@@ -478,30 +517,30 @@ do_exit() {
   require_state_verified_backend exit
   state=$(agent_state)
   case "$state" in
-    dead)
-      printf 'already-stopped'
-      return 0
-      ;;
-    alive) ;;
-    missing) die "task $ID's recorded endpoint is gone, so there is no agent to stop; reconcile the task before any further control action" ;;
-    *) die "task $ID's endpoint reads '$state' rather than a positively classified state; refusing to send a lifecycle command into an unattributed endpoint" ;;
+  dead)
+    printf 'already-stopped'
+    return 0
+    ;;
+  alive) ;;
+  missing) die "task $ID's recorded endpoint is gone, so there is no agent to stop; reconcile the task before any further control action" ;;
+  *) die "task $ID's endpoint reads '$state' rather than a positively classified state; refusing to send a lifecycle command into an unattributed endpoint" ;;
   esac
   # A busy agent is interrupted first before the exit command is submitted.
   case "$(busy_verdict)" in
-    busy*)
-      cancel=$(deliver_interrupt) || return $?
-      state=$(agent_state)
-      case "$state" in
-        dead)
-          retire_busy_incarnation
-          printf 'stopped'
-          return 0
-          ;;
-        alive) interrupt_result="delivered verified=agent-alive cancel=$cancel" ;;
-        missing) die "task $ID's recorded endpoint disappeared after interrupt delivery, so exit cannot prove whether the agent stopped" ;;
-        *) die "task $ID's endpoint reads '$state' after interrupt delivery rather than a positively classified state; exit cannot prove whether the agent stopped" ;;
-      esac
+  busy*)
+    cancel=$(deliver_interrupt) || return $?
+    state=$(agent_state)
+    case "$state" in
+    dead)
+      retire_busy_incarnation
+      printf 'stopped'
+      return 0
       ;;
+    alive) interrupt_result="delivered verified=agent-alive cancel=$cancel" ;;
+    missing) die "task $ID's recorded endpoint disappeared after interrupt delivery, so exit cannot prove whether the agent stopped" ;;
+    *) die "task $ID's endpoint reads '$state' after interrupt delivery rather than a positively classified state; exit cannot prove whether the agent stopped" ;;
+    esac
+    ;;
   esac
   cmd=$(fm_control_exit_command "$HARNESS")
   # The submit verdict is NOT the postcondition here: a successful exit command
@@ -510,10 +549,10 @@ do_exit() {
   # authoritative proof is the agent-state wait below. The retried Enter still
   # matters, because a slash command opens a completion popup on some TUIs that
   # swallows the first Enter.
-  verdict=$(fm_backend_send_text_submit "$BACKEND" "$T" "$cmd" "$EXIT_RETRIES" "$POLL" 1.2 "$LABEL") \
-    || die "the exit command could not be sent to task $ID on $BACKEND"
-  [ "$verdict" != send-failed ] \
-    || die "the exit command could not be sent to task $ID on $BACKEND"
+  verdict=$(fm_backend_send_text_submit "$BACKEND" "$T" "$cmd" "$EXIT_RETRIES" "$POLL" 1.2 "$LABEL") ||
+    die "the exit command could not be sent to task $ID on $BACKEND"
+  [ "$verdict" != send-failed ] ||
+    die "the exit command could not be sent to task $ID on $BACKEND"
   state=$(wait_agent_state "$EXIT_WAIT" dead) || {
     die "exit-delivered $ID interrupt=$interrupt_result exit-command=delivered agent-state=$state exit=unconfirmed; the agent did not stop within ${EXIT_WAIT}s"
   }
@@ -551,7 +590,7 @@ TARGET_HARNESS=$HARNESS
 TARGET_MODEL=
 TARGET_EFFORT=
 
-journal_write() {  # <phase> [extra-line]...
+journal_write() { # <phase> [extra-line]...
   local phase=$1
   shift
   if {
@@ -573,7 +612,7 @@ journal_write() {  # <phase> [extra-line]...
     for line in "$@"; do
       echo "$line"
     done
-  } > "$JOURNAL.tmp" && mv -f "$JOURNAL.tmp" "$JOURNAL"; then
+  } >"$JOURNAL.tmp" && mv -f "$JOURNAL.tmp" "$JOURNAL"; then
     RELAUNCH_PHASE=$phase
     return 0
   fi
@@ -586,54 +625,54 @@ relaunch_rollback() {
   [ "$RELAUNCH_PHASE" != complete ] || return 0
   RELAUNCH_ACTIVE=0
   case "$RELAUNCH_PHASE" in
-    checkpoint|noted)
-      # The old agent was never touched. Restore the instructions byte-exact so
-      # a refused relaunch leaves nothing behind.
+  checkpoint | noted)
+    # The old agent was never touched. Restore the instructions byte-exact so
+    # a refused relaunch leaves nothing behind.
+    if [ -n "$RELAUNCH_BRIEF" ] && [ -f "$BRIEF_PRIOR" ]; then
+      cp -p "$BRIEF_PRIOR" "$RELAUNCH_BRIEF" 2>/dev/null || true
+    fi
+    journal_write "failed:$RELAUNCH_PHASE" "rollback=instructions-restored" || true
+    echo "error: relaunch of $ID was refused before its agent was touched; nothing changed" >&2
+    ;;
+  stopping)
+    state=$(agent_state 2>/dev/null || printf unknown)
+    case "$state" in
+    alive)
       if [ -n "$RELAUNCH_BRIEF" ] && [ -f "$BRIEF_PRIOR" ]; then
         cp -p "$BRIEF_PRIOR" "$RELAUNCH_BRIEF" 2>/dev/null || true
       fi
-      journal_write "failed:$RELAUNCH_PHASE" "rollback=instructions-restored" || true
-      echo "error: relaunch of $ID was refused before its agent was touched; nothing changed" >&2
+      journal_write "failed:$RELAUNCH_PHASE" "rollback=instructions-restored-agent-alive" || true
+      echo "error: relaunch of $ID failed while stopping the old agent, which is still running; its original instructions were restored" >&2
       ;;
-    stopping)
-      state=$(agent_state 2>/dev/null || printf unknown)
-      case "$state" in
-        alive)
-          if [ -n "$RELAUNCH_BRIEF" ] && [ -f "$BRIEF_PRIOR" ]; then
-            cp -p "$BRIEF_PRIOR" "$RELAUNCH_BRIEF" 2>/dev/null || true
-          fi
-          journal_write "failed:$RELAUNCH_PHASE" "rollback=instructions-restored-agent-alive" || true
-          echo "error: relaunch of $ID failed while stopping the old agent, which is still running; its original instructions were restored" >&2
-          ;;
-        dead)
-          journal_write "failed:$RELAUNCH_PHASE" "rollback=prior-record-kept-agent-dead" || true
-          echo "error: $ID's agent stopped but relaunch did not reach replacement launch; no agent is running, and its work plus progress note are preserved at $WT" >&2
-          ;;
-        *)
-          journal_write "failed:$RELAUNCH_PHASE" "rollback=none-agent-state-$state" || true
-          echo "error: relaunch of $ID failed while stopping the old agent and its state is '$state'; the durable record and progress note were retained for recovery" >&2
-          ;;
-      esac
+    dead)
+      journal_write "failed:$RELAUNCH_PHASE" "rollback=prior-record-kept-agent-dead" || true
+      echo "error: $ID's agent stopped but relaunch did not reach replacement launch; no agent is running, and its work plus progress note are preserved at $WT" >&2
       ;;
-    exited|launching)
-      if [ "$RELAUNCH_AGENT_CONFIRMED" = 1 ]; then
-        journal_write "failed:$RELAUNCH_PHASE" "rollback=none-new-agent-confirmed" || true
-        echo "error: $ID's replacement is running on $TARGET_HARNESS, but transaction completion could not be persisted; its published record was retained for reconciliation" >&2
-      elif [ "$RELAUNCH_META_PUBLISHED" = 1 ] \
-         || { [ -n "$RELAUNCH_TX" ] \
-              && [ "$(fm_meta_get "$META" control_relaunch_tx)" = "$RELAUNCH_TX" ]; }; then
-        # The launch owner published the new incarnation's record. Leaving it
-        # in place is the honest state: the task is now recorded on the new
-        # harness with no agent confirmed, which is exactly what recovery
-        # reconciles. Rewriting it back to the old harness would be a second,
-        # worse inaccuracy.
-        journal_write "failed:$RELAUNCH_PHASE" "rollback=none-new-record-kept" || true
-        echo "error: $ID was relaunched on $TARGET_HARNESS but no running agent could be confirmed; its work is preserved at $WT" >&2
-      else
-        journal_write "failed:$RELAUNCH_PHASE" "rollback=prior-record-kept" || true
-        echo "error: $ID's agent was stopped but the replacement did not launch; no agent is running, and its work plus the recorded progress note are preserved at $WT" >&2
-      fi
+    *)
+      journal_write "failed:$RELAUNCH_PHASE" "rollback=none-agent-state-$state" || true
+      echo "error: relaunch of $ID failed while stopping the old agent and its state is '$state'; the durable record and progress note were retained for recovery" >&2
       ;;
+    esac
+    ;;
+  exited | launching)
+    if [ "$RELAUNCH_AGENT_CONFIRMED" = 1 ]; then
+      journal_write "failed:$RELAUNCH_PHASE" "rollback=none-new-agent-confirmed" || true
+      echo "error: $ID's replacement is running on $TARGET_HARNESS, but transaction completion could not be persisted; its published record was retained for reconciliation" >&2
+    elif [ "$RELAUNCH_META_PUBLISHED" = 1 ] ||
+      { [ -n "$RELAUNCH_TX" ] &&
+        [ "$(fm_meta_get "$META" control_relaunch_tx)" = "$RELAUNCH_TX" ]; }; then
+      # The launch owner published the new incarnation's record. Leaving it
+      # in place is the honest state: the task is now recorded on the new
+      # harness with no agent confirmed, which is exactly what recovery
+      # reconciles. Rewriting it back to the old harness would be a second,
+      # worse inaccuracy.
+      journal_write "failed:$RELAUNCH_PHASE" "rollback=none-new-record-kept" || true
+      echo "error: $ID was relaunched on $TARGET_HARNESS but no running agent could be confirmed; its work is preserved at $WT" >&2
+    else
+      journal_write "failed:$RELAUNCH_PHASE" "rollback=prior-record-kept" || true
+      echo "error: $ID's agent was stopped but the replacement did not launch; no agent is running, and its work plus the recorded progress note are preserved at $WT" >&2
+    fi
+    ;;
   esac
   return 0
 }
@@ -645,8 +684,8 @@ resolve_relaunch_profile() {
   PRIOR_EFFORT=$(fm_meta_get "$META" effort)
   [ -n "$PRIOR_MODEL" ] || PRIOR_MODEL=default
   [ -n "$PRIOR_EFFORT" ] || PRIOR_EFFORT=default
-  if [ "$HARNESS_SET" = 0 ] \
-     && [ "$PRIOR_RECORDED_HARNESS" != "$PRIOR_HARNESS" ]; then
+  if [ "$HARNESS_SET" = 0 ] &&
+    [ "$PRIOR_RECORDED_HARNESS" != "$PRIOR_HARNESS" ]; then
     die "task $ID records harness '$PRIOR_RECORDED_HARNESS', whose original launch command cannot be reconstructed from its recorded basename; relaunching without --harness would substitute the canonical adapter '$PRIOR_HARNESS' for the command actually running. Pass an explicit --harness to choose the replacement runtime deliberately"
   fi
   CONFIG_HARNESS=
@@ -664,20 +703,20 @@ resolve_relaunch_profile() {
     CONFIG_MODEL=$("$SCRIPT_DIR/fm-harness.sh" secondmate-model 2>/dev/null || true)
     CONFIG_EFFORT=$("$SCRIPT_DIR/fm-harness.sh" secondmate-effort 2>/dev/null || true)
     case "$CONFIG_EFFORT" in
-      ''|low|medium|high|xhigh|max) ;;
-      *)
-        echo "warning: config/secondmate-harness effort token '$CONFIG_EFFORT' is not one of low, medium, high, xhigh, max; ignoring" >&2
-        CONFIG_EFFORT=
-        ;;
+    '' | low | medium | high | xhigh | max) ;;
+    *)
+      echo "warning: config/secondmate-harness effort token '$CONFIG_EFFORT' is not one of low, medium, high, xhigh, max; ignoring" >&2
+      CONFIG_EFFORT=
+      ;;
     esac
   fi
   if [ "$HARNESS_SET" = 1 ]; then
-    fm_control_harness_supported "$NEW_HARNESS" \
-      || die "'$NEW_HARNESS' is not a verified harness; fm-control refuses to relaunch onto an adapter with no verified control or launch mechanics"
+    fm_control_harness_supported "$NEW_HARNESS" ||
+      die "'$NEW_HARNESS' is not a verified harness; fm-control refuses to relaunch onto an adapter with no verified control or launch mechanics"
     TARGET_HARNESS=$NEW_HARNESS
   elif [ "$HARNESS_SET" = 0 ] && [ -n "$CONFIG_HARNESS" ]; then
-    fm_control_harness_supported "$CONFIG_HARNESS" \
-      || die "the configured secondmate harness '$CONFIG_HARNESS' is not verified; fm-control refuses to relaunch onto an adapter with no verified control or launch mechanics"
+    fm_control_harness_supported "$CONFIG_HARNESS" ||
+      die "the configured secondmate harness '$CONFIG_HARNESS' is not verified; fm-control refuses to relaunch onto an adapter with no verified control or launch mechanics"
     TARGET_HARNESS=$CONFIG_HARNESS
   else
     TARGET_HARNESS=$PRIOR_HARNESS
@@ -686,8 +725,8 @@ resolve_relaunch_profile() {
   # is only reached after the old agent has been stopped. Asking the same
   # capability table here keeps that refusal on the pre-stop side of the
   # transaction, where nothing has changed yet.
-  fm_control_harness_supports_kind "$TARGET_HARNESS" "$KIND" \
-    || die "'$TARGET_HARNESS' is not verified to run a $KIND task, so relaunching $ID onto it would stop the running agent for a launch that must be refused; choose an adapter verified for this kind"
+  fm_control_harness_supports_kind "$TARGET_HARNESS" "$KIND" ||
+    die "'$TARGET_HARNESS' is not verified to run a $KIND task, so relaunching $ID onto it would stop the running agent for a launch that must be refused; choose an adapter verified for this kind"
   # A model or effort chosen for the previous harness does not transfer to a
   # different one, so an explicit harness change resets both axes unless the
   # caller names them too.
@@ -726,11 +765,11 @@ safe_checkpoint() {
   [ -n "$WT" ] || die "task $ID has no recorded worktree; refusing to relaunch without a recorded local copy to preserve"
   [ -d "$WT" ] || die "task $ID's recorded worktree $WT is missing; refusing to relaunch and lose track of its work"
   wt_real=$(cd "$WT" 2>/dev/null && pwd -P) || die "task $ID's recorded worktree $WT cannot be resolved"
-  wt_top=$(git -C "$WT" rev-parse --show-toplevel 2>/dev/null) \
-    || die "task $ID's recorded worktree $WT is not a git worktree; refusing to relaunch without a checkout whose unlanded work can be accounted for"
+  wt_top=$(git -C "$WT" rev-parse --show-toplevel 2>/dev/null) ||
+    die "task $ID's recorded worktree $WT is not a git worktree; refusing to relaunch without a checkout whose unlanded work can be accounted for"
   wt_top_real=$(cd "$wt_top" 2>/dev/null && pwd -P) || wt_top_real=$wt_top
-  [ "$wt_real" = "$wt_top_real" ] \
-    || die "task $ID's recorded worktree $WT is not a worktree root (root is $wt_top); refusing to relaunch against an ambiguous checkout"
+  [ "$wt_real" = "$wt_top_real" ] ||
+    die "task $ID's recorded worktree $WT is not a worktree root (root is $wt_top); refusing to relaunch against an ambiguous checkout"
   if head=$(git -C "$WT" rev-parse --verify HEAD 2>/dev/null); then
     :
   elif head_ref=$(git -C "$WT" symbolic-ref -q HEAD 2>/dev/null); then
@@ -738,15 +777,15 @@ safe_checkpoint() {
       die "task $ID's worktree HEAD exists but cannot be resolved; refusing to relaunch from an unreadable checkout"
     else
       head_ref_status=$?
-      [ "$head_ref_status" -eq 1 ] \
-        || die "task $ID's worktree HEAD cannot be inspected; refusing to relaunch from an unreadable checkout"
+      [ "$head_ref_status" -eq 1 ] ||
+        die "task $ID's worktree HEAD cannot be inspected; refusing to relaunch from an unreadable checkout"
       head=unborn
     fi
   else
     die "task $ID's worktree HEAD cannot be inspected; refusing to relaunch from an unreadable checkout"
   fi
-  status_output=$(git -C "$WT" status --porcelain 2>/dev/null) \
-    || die "task $ID's worktree status cannot be inspected; refusing to relaunch without accounting for local changes"
+  status_output=$(git -C "$WT" status --porcelain 2>/dev/null) ||
+    die "task $ID's worktree status cannot be inspected; refusing to relaunch without accounting for local changes"
   if [ -n "$status_output" ]; then
     dirty=yes
   else
@@ -757,10 +796,10 @@ safe_checkpoint() {
     local ep_state pids other_meta other_id other_wt other_wt_real
     ep_state=$(agent_state)
     case "$ep_state" in
-      missing) ;;
-      alive) die "task $ID's recorded endpoint reads 'alive'; refusing missing-endpoint recovery because a live agent still owns the recorded endpoint" ;;
-      dead) die "task $ID's recorded endpoint still exists (state: dead); use ordinary relaunch instead of missing-endpoint recovery" ;;
-      *) die "task $ID's recorded endpoint reads '$ep_state' rather than a positively missing endpoint; refusing recovery on ambiguous endpoint state" ;;
+    missing) ;;
+    alive) die "task $ID's recorded endpoint reads 'alive'; refusing missing-endpoint recovery because a live agent still owns the recorded endpoint" ;;
+    dead) die "task $ID's recorded endpoint still exists (state: dead); use ordinary relaunch instead of missing-endpoint recovery" ;;
+    *) die "task $ID's recorded endpoint reads '$ep_state' rather than a positively missing endpoint; refusing recovery on ambiguous endpoint state" ;;
     esac
     if ! pids=$(fm_process_pids_with_cwd_under "$WT"); then
       die "refusing recovery: cannot verify absence of live processes under $WT"
@@ -787,19 +826,19 @@ safe_checkpoint() {
     # readable BEFORE the agent stops, so a relaunch can never strand child
     # work behind an unreadable home.
     marker=$(cat "$WT/.fm-secondmate-home" 2>/dev/null || true)
-    [ "$marker" = "$ID" ] \
-      || die "task $ID's home $WT is not marked as its own seeded secondmate home (marker: ${marker:-none}); refusing to relaunch"
-    [ -d "$WT/state" ] \
-      || die "secondmate $ID's home has no readable state directory, so its child work cannot be accounted for; refusing to relaunch"
-    find "$WT/state" -mindepth 1 -maxdepth 1 -print >/dev/null 2>&1 \
-      || die "secondmate $ID's child records cannot be traversed; refusing to relaunch"
+    [ "$marker" = "$ID" ] ||
+      die "task $ID's home $WT is not marked as its own seeded secondmate home (marker: ${marker:-none}); refusing to relaunch"
+    [ -d "$WT/state" ] ||
+      die "secondmate $ID's home has no readable state directory, so its child work cannot be accounted for; refusing to relaunch"
+    find "$WT/state" -mindepth 1 -maxdepth 1 -print >/dev/null 2>&1 ||
+      die "secondmate $ID's child records cannot be traversed; refusing to relaunch"
     children=0
     for child_meta in "$WT/state"/*.meta; do
       if [ ! -e "$child_meta" ] && [ ! -L "$child_meta" ]; then
         continue
       fi
-      if [ ! -f "$child_meta" ] || [ -L "$child_meta" ] \
-         || ! cat "$child_meta" >/dev/null 2>&1; then
+      if [ ! -f "$child_meta" ] || [ -L "$child_meta" ] ||
+        ! cat "$child_meta" >/dev/null 2>&1; then
         die "secondmate $ID's child record $child_meta is not a readable regular file; refusing to relaunch"
       fi
       children=$((children + 1))
@@ -818,26 +857,26 @@ record_note() {
   local stamp
   [ -n "$NOTE" ] || return 0
   stamp=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-  printf '%s\n' "$NOTE" > "$NOTE_FILE"
+  printf '%s\n' "$NOTE" >"$NOTE_FILE"
   case "$KIND" in
-    ship|scout)
-      cp -p "$RELAUNCH_BRIEF" "$BRIEF_PRIOR" \
-        || die "could not preserve task $ID's instructions before recording the progress note"
-      {
-        echo
-        echo "## Progress note ($stamp)"
-        echo
-        echo "This task was relaunched. Continue from here; the local copy and every"
-        echo "uncommitted change are exactly as the previous worker left them."
-        echo
-        echo "First, check your instruction inbox: list $STATE/$ID.inbox/*.msg, act on"
-        echo "each message in numeric order, then mv each handled file into"
-        echo "$STATE/$ID.inbox/handled/. A steer sent before the relaunch survives there."
-        echo
-        printf '%s\n' "$NOTE"
-      } >> "$RELAUNCH_BRIEF" \
-        || die "could not append the progress note to task $ID's instructions"
-      ;;
+  ship | scout)
+    cp -p "$RELAUNCH_BRIEF" "$BRIEF_PRIOR" ||
+      die "could not preserve task $ID's instructions before recording the progress note"
+    {
+      echo
+      echo "## Progress note ($stamp)"
+      echo
+      echo "This task was relaunched. Continue from here; the local copy and every"
+      echo "uncommitted change are exactly as the previous worker left them."
+      echo
+      echo "First, check your instruction inbox: list $STATE/$ID.inbox/*.msg, act on"
+      echo "each message in numeric order, then mv each handled file into"
+      echo "$STATE/$ID.inbox/handled/. A steer sent before the relaunch survives there."
+      echo
+      printf '%s\n' "$NOTE"
+    } >>"$RELAUNCH_BRIEF" ||
+      die "could not append the progress note to task $ID's instructions"
+    ;;
   esac
 }
 
@@ -849,21 +888,21 @@ do_relaunch() {
   resolve_relaunch_profile
 
   case "$KIND" in
-    ship|scout)
-      RELAUNCH_BRIEF="$DATA/$ID/brief.md"
-      [ -f "$RELAUNCH_BRIEF" ] \
-        || die "task $ID has no instructions at $RELAUNCH_BRIEF; refusing to relaunch a worker with nothing to work from"
-      [ "$NOTE_SET" = 1 ] && [ -n "$NOTE" ] \
-        || die "relaunch of a $KIND task requires --note (or --note-file): the replacement worker inherits the local copy but none of the conversation, so it must be told what happened"
-      ;;
-    secondmate)
-      # The charter in the secondmate's own home is its instruction source and
-      # stays untouched.
-      RELAUNCH_BRIEF=
-      ;;
-    *)
-      die "task $ID records kind '$KIND', which has no defined relaunch shape"
-      ;;
+  ship | scout)
+    RELAUNCH_BRIEF="$DATA/$ID/brief.md"
+    [ -f "$RELAUNCH_BRIEF" ] ||
+      die "task $ID has no instructions at $RELAUNCH_BRIEF; refusing to relaunch a worker with nothing to work from"
+    [ "$NOTE_SET" = 1 ] && [ -n "$NOTE" ] ||
+      die "relaunch of a $KIND task requires --note (or --note-file): the replacement worker inherits the local copy but none of the conversation, so it must be told what happened"
+    ;;
+  secondmate)
+    # The charter in the secondmate's own home is its instruction source and
+    # stays untouched.
+    RELAUNCH_BRIEF=
+    ;;
+  *)
+    die "task $ID records kind '$KIND', which has no defined relaunch shape"
+    ;;
   esac
 
   if [ -n "$NOTE" ]; then
@@ -888,8 +927,8 @@ do_relaunch() {
     [ "$state" = missing ] || die "task $ID's endpoint changed to '$state' during recovery; refusing to proceed"
     current_spawn_gen=$(fm_meta_get "$META" spawn_gen 2>/dev/null || true)
     current_wt=$(fm_meta_get "$META" worktree 2>/dev/null || true)
-    [ "$current_spawn_gen" = "$META_SNAPSHOT_SPAWN_GEN" ] && [ "$current_wt" = "$META_SNAPSHOT_WT" ] \
-      || die "task $ID's metadata changed concurrently during recovery; refusing to proceed"
+    [ "$current_spawn_gen" = "$META_SNAPSHOT_SPAWN_GEN" ] && [ "$current_wt" = "$META_SNAPSHOT_WT" ] ||
+      die "task $ID's metadata changed concurrently during recovery; refusing to proceed"
     exit_result=endpoint-missing-confirmed
     journal_write exited "${CHECKPOINT_LINES[@]}" "$note_line" "exit_result=$exit_result" "recovery=missing-endpoint"
   fi
@@ -907,11 +946,11 @@ do_relaunch() {
     spawn_args+=(--recover-missing-endpoint)
   fi
   if FM_CONTROL_RELAUNCH_TX="$RELAUNCH_TX" \
-      "$SCRIPT_DIR/fm-spawn.sh" "${spawn_args[@]}" >/dev/null; then
+    "$SCRIPT_DIR/fm-spawn.sh" "${spawn_args[@]}" >/dev/null; then
     RELAUNCH_META_PUBLISHED=1
   else
-    [ "$(fm_meta_get "$META" control_relaunch_tx)" != "$RELAUNCH_TX" ] \
-      || RELAUNCH_META_PUBLISHED=1
+    [ "$(fm_meta_get "$META" control_relaunch_tx)" != "$RELAUNCH_TX" ] ||
+      RELAUNCH_META_PUBLISHED=1
     die "the replacement agent for $ID could not be launched on $TARGET_HARNESS"
   fi
 
@@ -945,27 +984,27 @@ do_relaunch() {
 # --- verbs ------------------------------------------------------------------
 
 case "$VERB" in
-  interrupt)
-    state=$(agent_state)
-    case "$state" in
-      alive) ;;
-      unverified)
-        # No recovery-grade classifier on this backend. Interrupt is
-        # non-destructive and its endpoint-existence postcondition is still
-        # real, so it proceeds - the printed proof names exactly what was
-        # verified rather than implying more.
-        ;;
-      dead|missing) die "no agent is running at task $ID's recorded endpoint (state: $state); there is nothing to interrupt" ;;
-      *) die "task $ID's endpoint reads '$state' rather than a positively classified state; refusing to send a lifecycle key into an unattributed endpoint" ;;
-    esac
-    proof=$(do_interrupt)
-    echo "interrupt-delivered $ID harness=$HARNESS backend=$BACKEND verified=$proof"
+interrupt)
+  state=$(agent_state)
+  case "$state" in
+  alive) ;;
+  unverified)
+    # No recovery-grade classifier on this backend. Interrupt is
+    # non-destructive and its endpoint-existence postcondition is still
+    # real, so it proceeds - the printed proof names exactly what was
+    # verified rather than implying more.
     ;;
-  exit)
-    result=$(do_exit)
-    echo "$result $ID harness=$HARNESS backend=$BACKEND endpoint=$T worktree=$WT"
-    ;;
-  relaunch|recover)
-    do_relaunch
-    ;;
+  dead | missing) die "no agent is running at task $ID's recorded endpoint (state: $state); there is nothing to interrupt" ;;
+  *) die "task $ID's endpoint reads '$state' rather than a positively classified state; refusing to send a lifecycle key into an unattributed endpoint" ;;
+  esac
+  proof=$(do_interrupt)
+  echo "interrupt-delivered $ID harness=$HARNESS backend=$BACKEND verified=$proof"
+  ;;
+exit)
+  result=$(do_exit)
+  echo "$result $ID harness=$HARNESS backend=$BACKEND endpoint=$T worktree=$WT"
+  ;;
+relaunch | recover)
+  do_relaunch
+  ;;
 esac

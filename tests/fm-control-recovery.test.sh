@@ -39,10 +39,10 @@ recovery_cleanup() {
 }
 trap recovery_cleanup EXIT
 
-make_tmux_stub() {  # <dir>
+make_tmux_stub() { # <dir>
   local fb="$1/fakebin"
   mkdir -p "$fb"
-  cat > "$fb/tmux" <<'SH'
+  cat >"$fb/tmux" <<'SH'
 #!/usr/bin/env bash
 set -u
 D=$FM_FAKE_DIR
@@ -110,7 +110,7 @@ exit 0
 SH
   chmod +x "$fb/tmux"
 
-  cat > "$fb/lsof" <<'SH'
+  cat >"$fb/lsof" <<'SH'
 #!/usr/bin/env bash
 set -u
 D=$FM_FAKE_DIR
@@ -126,7 +126,7 @@ exit 0
 SH
   chmod +x "$fb/lsof"
 
-  cat > "$fb/sleep" <<'SH'
+  cat >"$fb/sleep" <<'SH'
 #!/usr/bin/env bash
 exit 0
 SH
@@ -136,11 +136,11 @@ SH
 new_case() {
   local id=${2:-t1} dir="$TMP_ROOT/$1-$RANDOM"
   mkdir -p "$dir/home/state" "$dir/home/data" "$dir/fake"
-  : > "$dir/fake/literal"
-  : > "$dir/fake/keys"
-  printf 'claude' > "$dir/fake/command"
-  printf 'claude' > "$dir/fake/becomes"
-  : > "$dir/fake/windows"
+  : >"$dir/fake/literal"
+  : >"$dir/fake/keys"
+  printf 'claude' >"$dir/fake/command"
+  printf 'claude' >"$dir/fake/becomes"
+  : >"$dir/fake/windows"
   make_tmux_stub "$dir"
   printf '%s\n' "$dir"
 }
@@ -150,7 +150,7 @@ add_ship_task_missing_endpoint() {
   local home="$dir/home" proj="$dir/proj" wt="$dir/wt"
   fm_git_worktree "$proj" "$wt" "task-$id"
   mkdir -p "$home/data/$id"
-  cat > "$home/data/$id/brief.md" <<EOF
+  cat >"$home/data/$id/brief.md" <<EOF
 # Task
 ## Captain's intent
 Exercise missing-endpoint recovery for $id.
@@ -171,18 +171,19 @@ EOF
     echo "model=default"
     echo "effort=default"
     echo "spawn_gen=s_initial"
-  } > "$home/state/$id.meta"
+  } >"$home/state/$id.meta"
   # Uncommitted changes to be preserved
-  echo "uncommitted file 1" > "$wt/file1.txt"
-  echo "uncommitted file 2" > "$wt/file2.txt"
+  echo "uncommitted file 1" >"$wt/file1.txt"
+  echo "uncommitted file 2" >"$wt/file2.txt"
   # Missing endpoint: fm-$id is NOT in $dir/fake/windows
-  : > "$dir/fake/windows"
-  printf '%s' "$proj" > "$dir/fake/cwd"
+  : >"$dir/fake/windows"
+  printf '%s' "$proj" >"$dir/fake/cwd"
   TASK_TMPS+=("/tmp/fm-$id")
 }
 
 run_control() {
-  local dir=$1; shift
+  local dir=$1
+  shift
   mkdir -p "$dir/user-home"
   env PATH="$dir/fakebin:$PATH" FM_HOME="$dir/home" FM_FAKE_DIR="$dir/fake" \
     HOME="$dir/user-home" CLAUDE_CONFIG_DIR='' \
@@ -202,7 +203,8 @@ test_successful_recovery_verb() {
   add_ship_task_missing_endpoint "$dir" t1 claude
   wt="$dir/wt"
 
-  out=$(run_control "$dir" t1 recover --note "recovering dead worker process"); rc=$?
+  out=$(run_control "$dir" t1 recover --note "recovering dead worker process")
+  rc=$?
   expect_code 0 "$rc" "recovery via recover verb should succeed"
   assert_contains "$out" "recovered t1 harness=claude" "output should announce recovery"
 
@@ -228,7 +230,8 @@ test_successful_recovery_relaunch_flag() {
   add_ship_task_missing_endpoint "$dir" t1 claude
   wt="$dir/wt"
 
-  out=$(run_control "$dir" t1 relaunch --recover-missing-endpoint --note "recovering via flag"); rc=$?
+  out=$(run_control "$dir" t1 relaunch --recover-missing-endpoint --note "recovering via flag")
+  rc=$?
   expect_code 0 "$rc" "recovery via relaunch flag should succeed"
   assert_contains "$out" "recovered t1 harness=claude" "output should announce recovery"
   [ -f "$wt/file1.txt" ] || fail "uncommitted file1.txt should be preserved"
@@ -241,11 +244,12 @@ test_live_endpoint_refusal() {
   dir=$(new_case live-endpoint)
   add_ship_task_missing_endpoint "$dir" t1 claude
   # Endpoint is actually alive in fake tmux
-  printf '%s\n' "fm-t1" > "$dir/fake/windows"
-  printf 'claude' > "$dir/fake/command"
-  printf '%s' "$dir/wt" > "$dir/fake/cwd"
+  printf '%s\n' "fm-t1" >"$dir/fake/windows"
+  printf 'claude' >"$dir/fake/command"
+  printf '%s' "$dir/wt" >"$dir/fake/cwd"
 
-  out=$(run_control "$dir" t1 recover --note "should be refused"); rc=$?
+  out=$(run_control "$dir" t1 recover --note "should be refused")
+  rc=$?
   expect_code 1 "$rc" "recovering a live endpoint must be refused"
   assert_contains "$out" "refusing missing-endpoint recovery because a live agent still owns the recorded endpoint" \
     "refusal should report live endpoint ownership"
@@ -259,9 +263,10 @@ test_live_process_in_worktree_refusal() {
   dir=$(new_case live-proc)
   add_ship_task_missing_endpoint "$dir" t1 claude
   # Simulate an independent process holding cwd in the worktree
-  printf 'p8888\nfcwd\nn%s\n' "$dir/wt" > "$dir/fake/lsof_output"
+  printf 'p8888\nfcwd\nn%s\n' "$dir/wt" >"$dir/fake/lsof_output"
 
-  out=$(run_control "$dir" t1 recover --note "should be refused"); rc=$?
+  out=$(run_control "$dir" t1 recover --note "should be refused")
+  rc=$?
   expect_code 1 "$rc" "recovery with live process in worktree must be refused"
   assert_contains "$out" "live process(es) (8888) still have current working directory" \
     "refusal should name the live process in worktree"
@@ -275,9 +280,10 @@ test_ambiguous_ownership_lsof_failure_refusal() {
   dir=$(new_case ambig-lsof)
   add_ship_task_missing_endpoint "$dir" t1 claude
   # Simulate lsof probe error
-  : > "$dir/fake/lsof_fail"
+  : >"$dir/fake/lsof_fail"
 
-  out=$(run_control "$dir" t1 recover --note "should be refused"); rc=$?
+  out=$(run_control "$dir" t1 recover --note "should be refused")
+  rc=$?
   expect_code 1 "$rc" "recovery with ambiguous process state must be refused"
   assert_contains "$out" "cannot verify absence of live processes under" \
     "refusal should report inability to verify process state"
@@ -291,7 +297,7 @@ test_shared_worktree_refusal() {
   dir=$(new_case shared-wt)
   add_ship_task_missing_endpoint "$dir" t1 claude
   # Create a second task pointing to the same worktree
-  cat > "$dir/home/state/t2.meta" <<EOF
+  cat >"$dir/home/state/t2.meta" <<EOF
 window=fmses:fm-t2
 endpoint_task_id=t2
 worktree=$dir/wt
@@ -301,7 +307,8 @@ kind=ship
 mode=no-mistakes
 EOF
 
-  out=$(run_control "$dir" t1 recover --note "should be refused"); rc=$?
+  out=$(run_control "$dir" t1 recover --note "should be refused")
+  rc=$?
   expect_code 1 "$rc" "recovery with shared worktree must be refused"
   assert_contains "$out" "refusing shared worktree recovery" \
     "refusal should report shared worktree ownership"
@@ -316,7 +323,8 @@ test_worktree_disappearance_refusal() {
   # Remove the worktree directory
   rm -rf "$dir/wt"
 
-  out=$(run_control "$dir" t1 recover --note "should be refused"); rc=$?
+  out=$(run_control "$dir" t1 recover --note "should be refused")
+  rc=$?
   expect_code 1 "$rc" "recovery with missing worktree must be refused"
   assert_contains "$out" "recorded worktree" \
     "refusal should report that the recorded worktree is missing"
@@ -332,7 +340,7 @@ test_concurrent_ownership_change_refusal() {
   add_ship_task_missing_endpoint "$dir" t1 claude
 
   # Fake git stub that alters metadata during HEAD check
-  cat > "$dir/fakebin/git" <<SH
+  cat >"$dir/fakebin/git" <<SH
 #!/usr/bin/env bash
 if [ "\${1:-}" = "-C" ]; then
   # Intercept checkpoint check to tamper with metadata concurrently
@@ -342,7 +350,8 @@ exec /usr/bin/git "\$@"
 SH
   chmod +x "$dir/fakebin/git"
 
-  out=$(run_control "$dir" t1 recover --note "should be refused"); rc=$?
+  out=$(run_control "$dir" t1 recover --note "should be refused")
+  rc=$?
   expect_code 1 "$rc" "recovery with concurrent metadata change must be refused"
   assert_contains "$out" "metadata changed concurrently during recovery" \
     "refusal should detect concurrent metadata change"
@@ -355,7 +364,8 @@ test_ordinary_relaunch_refuses_missing_endpoint() {
   dir=$(new_case ord-relaunch)
   add_ship_task_missing_endpoint "$dir" t1 claude
 
-  out=$(run_control "$dir" t1 relaunch --note "trying ordinary relaunch"); rc=$?
+  out=$(run_control "$dir" t1 relaunch --note "trying ordinary relaunch")
+  rc=$?
   expect_code 1 "$rc" "ordinary relaunch must refuse a missing endpoint"
   assert_contains "$out" "recorded endpoint is gone, so there is no agent to stop" \
     "ordinary relaunch refusal must preserve positive agent-free endpoint requirement"
@@ -368,11 +378,12 @@ test_recover_refuses_when_endpoint_still_exists() {
   dir=$(new_case ep-exists)
   add_ship_task_missing_endpoint "$dir" t1 claude
   # Endpoint exists in dead state (in windows list, command is zsh)
-  printf '%s\n' "fm-t1" > "$dir/fake/windows"
-  printf 'zsh' > "$dir/fake/command"
-  printf '%s' "$dir/wt" > "$dir/fake/cwd"
+  printf '%s\n' "fm-t1" >"$dir/fake/windows"
+  printf 'zsh' >"$dir/fake/command"
+  printf '%s' "$dir/wt" >"$dir/fake/cwd"
 
-  out=$(run_control "$dir" t1 recover --note "trying recover on dead endpoint"); rc=$?
+  out=$(run_control "$dir" t1 recover --note "trying recover on dead endpoint")
+  rc=$?
   expect_code 1 "$rc" "recover must refuse when recorded endpoint still exists"
   assert_contains "$out" "recorded endpoint still exists (state: dead); use ordinary relaunch instead of missing-endpoint recovery" \
     "refusal should direct operator to ordinary relaunch when endpoint exists"
