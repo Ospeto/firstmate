@@ -3276,6 +3276,24 @@ EOF
     fi
     T="$ORCA_TERMINAL"
     ;;
+  paseo)
+    fm_backend_paseo_daemon_check || exit 1
+    PASEO_WS_RAW=$(fm_backend_paseo_workspace_create "$PROJ_ABS" "$W" "main") || exit 1
+    PASEO_WORKSPACE_ID=$(printf '%s' "$PASEO_WS_RAW" | node -e 'try { console.log(JSON.parse(require("fs").readFileSync(0, "utf8")).workspaceId || ""); } catch(e){}')
+    WT=$(printf '%s' "$PASEO_WS_RAW" | node -e 'try { console.log(JSON.parse(require("fs").readFileSync(0, "utf8")).cwd || ""); } catch(e){}')
+    if [ -z "$PASEO_WORKSPACE_ID" ] || [ -z "$WT" ]; then
+      echo "error: paseo did not return a workspace id/path for $W" >&2
+      exit 1
+    fi
+    validate_spawn_worktree "paseo workspace create" "$W"
+    PASEO_TERM_RAW=$(paseo terminal create --workspace "$PASEO_WORKSPACE_ID" --cwd "$WT" --name "$W" --json) || exit 1
+    PASEO_TERMINAL_ID=$(printf '%s' "$PASEO_TERM_RAW" | node -e 'try { console.log(JSON.parse(require("fs").readFileSync(0, "utf8")).id || ""); } catch(e){}')
+    if [ -z "$PASEO_TERMINAL_ID" ]; then
+      echo "error: paseo did not return a terminal id for $W" >&2
+      exit 1
+    fi
+    T="$PASEO_TERMINAL_ID"
+    ;;
   esac
 fi
 if [ "$KIND" = secondmate ]; then
@@ -3296,6 +3314,7 @@ spawn_send_text_line() { # <target> <text>
   zellij) fm_backend_zellij_send_text_line "$1" "$2" "$W" ;;
   orca) fm_backend_orca_send_text_line "$1" "$2" ;;
   cmux) fm_backend_cmux_send_text_line "$1" "$2" "$W" ;;
+  paseo) fm_backend_paseo_send_text_line "$1" "$2" ;;
   esac
 }
 spawn_current_path() { # <target>
@@ -3304,6 +3323,7 @@ spawn_current_path() { # <target>
   herdr) fm_backend_herdr_current_path "$1" ;;
   zellij) fm_backend_zellij_current_path "$1" "$W" ;;
   cmux) fm_backend_cmux_current_path "$1" "$W" ;;
+  paseo) printf '%s' "$WT" ;;
   esac
 }
 spawn_send_literal() { # <target> <text>
@@ -3313,6 +3333,7 @@ spawn_send_literal() { # <target> <text>
   zellij) fm_backend_zellij_send_literal "$1" "$2" "$W" ;;
   orca) fm_backend_orca_send_literal "$1" "$2" ;;
   cmux) fm_backend_cmux_send_literal "$1" "$2" "$W" ;;
+  paseo) fm_backend_paseo_send_literal "$1" "$2" ;;
   esac
 }
 spawn_send_key() { # <target> <key>
@@ -3322,6 +3343,7 @@ spawn_send_key() { # <target> <key>
   zellij) fm_backend_zellij_send_key "$1" "$2" "$W" ;;
   orca) fm_backend_orca_send_key "$1" "$2" ;;
   cmux) fm_backend_cmux_send_key "$1" "$2" "$W" ;;
+  paseo) fm_backend_paseo_send_key "$1" "$2" ;;
   esac
 }
 
@@ -3652,7 +3674,7 @@ if [ "$RELAUNCH" -eq 1 ]; then
     fi
   fi
   [ "$KIND" = secondmate ] || validate_spawn_worktree "relaunch" "$T"
-elif [ "$KIND" != secondmate ] && [ "$BACKEND" != orca ]; then
+elif [ "$KIND" != secondmate ] && [ "$BACKEND" != orca ] && [ "$BACKEND" != paseo ]; then
   spawn_send_text_line "$WT_TARGET" 'treehouse get'
 
   # Wait for the treehouse subshell: the pane's cwd moves from the project to the worktree.
@@ -4291,6 +4313,10 @@ preserve_relaunch_meta() {
   if [ "$BACKEND" = orca ]; then
     echo "orca_worktree_id=$ORCA_WORKTREE_ID"
     echo "terminal=$ORCA_TERMINAL"
+  fi
+  if [ "$BACKEND" = paseo ]; then
+    echo "paseo_workspace_id=$PASEO_WORKSPACE_ID"
+    echo "terminal=$PASEO_TERMINAL_ID"
   fi
   if [ "$BACKEND" = cmux ]; then
     echo "cmux_workspace_id=$CMUX_WORKSPACE_ID"
