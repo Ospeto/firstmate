@@ -36,7 +36,9 @@ fm_backend_paseo_daemon_check() {
 const fs = require("fs");
 try {
   const data = JSON.parse(fs.readFileSync(0, "utf8"));
-  if (data.LocalDaemon !== "running" && data.ConnectedDaemon !== "reachable") {
+  const local = data.localDaemon || data.LocalDaemon;
+  const connected = data.connectedDaemon || data.ConnectedDaemon;
+  if (local !== "running" && connected !== "reachable") {
     console.error("error: Paseo daemon is not running");
     process.exit(1);
   }
