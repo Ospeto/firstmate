@@ -140,6 +140,12 @@ FM_BACKEND_CMUX_BUNDLE_ID="com.cmuxterm.app"
 fm_backend_detect() {
   FM_BACKEND_DETECTED=""
   FM_BACKEND_DETECT_SIGNAL=""
+  if [ -n "${PASEO_AGENT_ID:-}" ]; then
+    FM_BACKEND_DETECTED=paseo
+    FM_BACKEND_DETECT_SIGNAL=PASEO_AGENT_ID
+    printf 'paseo'
+    return 0
+  fi
   if [ -n "${TMUX:-}" ]; then
     FM_BACKEND_DETECTED=tmux
     FM_BACKEND_DETECT_SIGNAL=TMUX
