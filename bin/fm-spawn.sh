@@ -3278,21 +3278,19 @@ EOF
     ;;
   paseo)
     fm_backend_paseo_daemon_check || exit 1
-    PASEO_WS_RAW=$(fm_backend_paseo_workspace_create "$PROJ_ABS" "$W" "main") || exit 1
-    PASEO_WORKSPACE_ID=$(printf '%s' "$PASEO_WS_RAW" | node -e 'try { console.log(JSON.parse(require("fs").readFileSync(0, "utf8")).workspaceId || ""); } catch(e){}')
-    WT=$(printf '%s' "$PASEO_WS_RAW" | node -e 'try { console.log(JSON.parse(require("fs").readFileSync(0, "utf8")).cwd || ""); } catch(e){}')
-    if [ -z "$PASEO_WORKSPACE_ID" ] || [ -z "$WT" ]; then
-      echo "error: paseo did not return a workspace id/path for $W" >&2
-      exit 1
+    if [ "$KIND" = secondmate ]; then
+      WT="$PROJ_ABS"
+    else
+      PASEO_WS_RAW=$(fm_backend_paseo_workspace_create "$PROJ_ABS" "$W" "main") || exit 1
+      WT=$(printf '%s' "$PASEO_WS_RAW" | node -e 'try { console.log(JSON.parse(require("fs").readFileSync(0, "utf8")).cwd || ""); } catch(e){}')
+      if [ -z "$WT" ]; then
+        echo "error: paseo did not return a worktree path for $W" >&2
+        exit 1
+      fi
+      validate_spawn_worktree "paseo workspace create" "$W"
     fi
-    validate_spawn_worktree "paseo workspace create" "$W"
-    PASEO_TERM_RAW=$(paseo terminal create --workspace "$PASEO_WORKSPACE_ID" --cwd "$WT" --name "$W" --json) || exit 1
-    PASEO_TERMINAL_ID=$(printf '%s' "$PASEO_TERM_RAW" | node -e 'try { console.log(JSON.parse(require("fs").readFileSync(0, "utf8")).id || ""); } catch(e){}')
-    if [ -z "$PASEO_TERMINAL_ID" ]; then
-      echo "error: paseo did not return a terminal id for $W" >&2
-      exit 1
-    fi
-    T="$PASEO_TERMINAL_ID"
+    PASEO_AGENT_ID_SPAWNED=$(fm_backend_paseo_spawn_agent "$ID" "$W" "$WT" "$BRIEF" "$MODEL" "$EFFORT" "$KIND") || exit 1
+    T="$PASEO_AGENT_ID_SPAWNED"
     ;;
   esac
 fi
@@ -4606,14 +4604,16 @@ if [ "$LAUNCH_ENV_ENABLED" = 1 ]; then
   fi
   LAUNCH="$LAUNCH_ENV_PREFIX /bin/sh -c $(shell_quote "$LAUNCH")"
 fi
-sleep 0.3
-spawn_send_literal "$T" "$LAUNCH"
-sleep 0.3
-if [ "${HERDR_PROJECTED:-0}" -eq 1 ]; then
-  HERDR_PROJECTION_ABORT_CLEANUP=0
-  spawn_herdr_presentation_order_lock_release
+if [ "$BACKEND" != paseo ]; then
+  sleep 0.3
+  spawn_send_literal "$T" "$LAUNCH"
+  sleep 0.3
+  if [ "${HERDR_PROJECTED:-0}" -eq 1 ]; then
+    HERDR_PROJECTION_ABORT_CLEANUP=0
+    spawn_herdr_presentation_order_lock_release
+  fi
+  spawn_send_key "$T" Enter
 fi
-spawn_send_key "$T" Enter
 if [ "$HARNESS" = kimi ]; then
   if ! kimi_wait_for_ready; then
     kimi_spawn_fail "$KIMI_READY_FAILURE_DETAIL"
