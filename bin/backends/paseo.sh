@@ -114,7 +114,7 @@ const name = first(data.name, data.Name, data.agent?.name, data.agent?.Name) || 
 const title = first(data.title, data.Title, data.agent?.title, data.agent?.Title) || "";
 const identityOwned = labelOwned || name === "fm-" + expectedTask || title === "fm-" + expectedTask;
 const actualCwd = first(data.cwd, data.Cwd, data.agent?.cwd, data.agent?.Cwd);
-const actualWorkspace = first(
+let actualWorkspace = first(
   data.workspaceId, data.WorkspaceId, data.workspace_id,
   data.workspace?.workspaceId, data.workspace?.WorkspaceId, data.workspace?.id, data.workspace?.Id,
   data.Workspace?.workspaceId, data.Workspace?.WorkspaceId, data.Workspace?.id, data.Workspace?.Id,
@@ -126,6 +126,14 @@ const normalize = value => {
   if (typeof value !== "string" || !path.isAbsolute(value)) return "";
   return path.normalize(path.resolve(value));
 };
+if (!actualWorkspace && actualCwd) {
+  try {
+    const cp = require("child_process");
+    const list = JSON.parse(cp.execSync("paseo workspace ls --json 2>/dev/null", { encoding: "utf8" }));
+    const ws = list.find(w => normalize(w.cwd) === normalize(actualCwd));
+    if (ws && (ws.workspaceId || ws.id)) actualWorkspace = ws.workspaceId || ws.id;
+  } catch (e) {}
+}
 if (!identityOwned || typeof actualWorkspace !== "string" || actualWorkspace !== expectedWorkspace ||
     normalize(actualCwd) === "" || normalize(recordedWorktree) === "" ||
     normalize(actualCwd) !== normalize(recordedWorktree)) {
