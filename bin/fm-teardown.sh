@@ -350,6 +350,7 @@ if [ -f "$META" ] && [ ! -L "$META" ]; then
   TEARDOWN_LOCK_PROJECT=$(fm_meta_get "$META" project)
   if [ "$TEARDOWN_LOCK_KIND" != secondmate ] \
      && [ "$TEARDOWN_LOCK_BACKEND" != orca ] \
+     && [ "$TEARDOWN_LOCK_BACKEND" != paseo ] \
      && fm_treehouse_pool_slot "$TEARDOWN_LOCK_PROJECT" "$TEARDOWN_LOCK_WT"; then
     TREEHOUSE_SLOT_LOCK_REQUIRED=1
     TREEHOUSE_PROJECT_LOCK=$(fm_treehouse_project_lock_path "$TEARDOWN_LOCK_PROJECT") || {
@@ -418,7 +419,7 @@ CONTROL_LOCK_HELD=1
 # Fail closed before any fleet mutation: a no-mistakes gate agent must never tear
 # down a worktree (see bin/fm-gate-refuse-lib.sh).
 fm_refuse_if_gate_agent
-FM_LOCK_LOG_PREFIX=teardown
+_FM_LOCK_LOG_PREFIX=teardown
 
 fm_backlog_record_present "$META" "task record" "$STATE" || {
   echo "error: teardown refused: $FM_BACKLOG_TRANSITION_ERROR" >&2
@@ -993,7 +994,7 @@ CLEANUP_RECOVERY=$TEARDOWN_CLEANUP_RECOVERY
 
 KIND=$TEARDOWN_META_KIND
 EXPECTED_TREEHOUSE_PROJECT_LOCK=
-if [ "$KIND" != secondmate ] && [ "$BACKEND" != orca ] \
+if [ "$KIND" != secondmate ] && [ "$BACKEND" != orca ] && [ "$BACKEND" != paseo ] \
    && fm_treehouse_pool_slot "$PROJ" "$WT"; then
   EXPECTED_TREEHOUSE_PROJECT_LOCK=$(fm_treehouse_project_lock_path "$PROJ") || {
     echo "REFUSED: cannot resolve the shared Treehouse project lock for ${PROJ:-<missing>}; nothing was changed" >&2
@@ -2776,7 +2777,7 @@ preflight_descendant_treehouse_slots() {
     backend=$(fm_backend_of_meta "$meta")
     worktree=$(meta_value "$meta" worktree)
     project=$(meta_value "$meta" project)
-    if [ "$kind" = secondmate ] || [ "$backend" = orca ]; then
+    if [ "$kind" = secondmate ] || [ "$backend" = orca ] || [ "$backend" = paseo ]; then
       continue
     fi
     if ! fm_treehouse_pool_slot "$project" "$worktree"; then
@@ -2809,7 +2810,7 @@ preflight_descendant_treehouse_slots() {
     backend=$(fm_backend_of_meta "$meta")
     worktree=$(meta_value "$meta" worktree)
     project=$(meta_value "$meta" project)
-    if [ "$kind" = secondmate ] || [ "$backend" = orca ]; then
+    if [ "$kind" = secondmate ] || [ "$backend" = orca ] || [ "$backend" = paseo ]; then
       continue
     fi
     if ! fm_treehouse_pool_slot "$project" "$worktree"; then
@@ -3422,6 +3423,28 @@ if [ "$BACKEND" = orca ] && [ "$KIND" != secondmate ]; then
       || { endpoint_close_refusal "$ID" "$BACKEND" "$T" 0; exit 1; }
   fi
   fm_backend_remove_worktree "$BACKEND" "$ORCA_WORKTREE_ID"
+elif [ "$BACKEND" = paseo ] && [ "$KIND" != secondmate ]; then
+  if [ -d "$WT" ]; then
+    branch=$(git -C "$WT" rev-parse --abbrev-ref HEAD 2>/dev/null || echo HEAD)
+    if [ "$branch" != "HEAD" ]; then
+      if git -C "$WT" checkout --detach -q 2>/dev/null; then
+        git -C "$WT" branch -D "$branch" >/dev/null 2>&1 || true
+      fi
+    fi
+  fi
+  fm_backend_kill "$BACKEND" "$T" || {
+    endpoint_close_refusal "$ID" "$BACKEND" "$T" 0
+    exit 1
+  }
+  PASEO_WORKSPACE_ID=$(meta_value "$META" paseo_workspace_id)
+  if [ -z "$PASEO_WORKSPACE_ID" ]; then
+    echo "error: Paseo workspace id is missing for $ID; preserving task state" >&2
+    exit 1
+  fi
+  fm_backend_remove_worktree "$BACKEND" "$PASEO_WORKSPACE_ID" || {
+    echo "error: Paseo workspace $PASEO_WORKSPACE_ID was not archived and verified; preserving task state" >&2
+    exit 1
+  }
 elif [ "$KIND" != secondmate ] && ! teardown_owns_worktree; then
   :
 elif [ -d "$WT" ] && [ "$KIND" != secondmate ]; then
@@ -3497,7 +3520,7 @@ elif [ "$BACKEND" = herdr ]; then
   else
     echo "warning: herdr session presentation lock path is unavailable; skipping the pane close rather than closing unlocked" >&2
   fi
-elif [ "$BACKEND" != orca ]; then
+elif [ "$BACKEND" != orca ] && [ "$BACKEND" != paseo ]; then
   fm_backend_kill "$BACKEND" "$T" "$(meta_value "$META" zellij_tab_id)" "fm-$ID" \
     || endpoint_close_refusal "$ID" "$BACKEND" "$T" 1 || exit 1
 fi

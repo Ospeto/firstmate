@@ -1081,6 +1081,9 @@ BACKEND=
 ORCA_ABORT_CLEANUP=0
 ORCA_WORKTREE_ID=
 ORCA_TERMINAL=
+PASEO_ABORT_CLEANUP=0
+PASEO_WORKSPACE_ID=
+PASEO_TERMINAL_ID=
 HERDR_PROJECTION_ABORT_CLEANUP=0
 HERDR_PROJECTION_ABORT_SESSION=
 HERDR_PROJECTION_ABORT_TASK_PANE=
@@ -1217,6 +1220,21 @@ spawn_abort_cleanup() {
             fm_backlog_atomic_transition publish "$SPAWN_META_TMP" "$STATE/$ID.meta" "task record" "$STATE" ||
             true
         fi
+      fi
+    fi
+  fi
+  if [ "$PASEO_ABORT_CLEANUP" = 1 ]; then
+    PASEO_ABORT_CLEANUP=0
+    if [ -n "${PASEO_AGENT_ID_SPAWNED:-}" ]; then
+      if ! fm_backend_kill paseo "$PASEO_AGENT_ID_SPAWNED"; then
+        echo "error: could not clean up Paseo agent $PASEO_AGENT_ID_SPAWNED after spawn failure" >&2
+        status=1
+      fi
+    fi
+    if [ -n "${PASEO_WORKSPACE_ID:-}" ]; then
+      if ! fm_backend_remove_worktree paseo "$PASEO_WORKSPACE_ID"; then
+        echo "error: could not clean up Paseo workspace $PASEO_WORKSPACE_ID after spawn failure" >&2
+        status=1
       fi
     fi
   fi
@@ -1533,6 +1551,10 @@ if [ "$RELAUNCH" -eq 0 ]; then
   if [ "$BACKEND" = orca ] && [ "$KIND" = secondmate ]; then
     echo "error: backend=orca does not support --secondmate spawns yet" >&2
     exit 1
+  fi
+  if [ "$BACKEND" = paseo ]; then
+    fm_backend_source paseo || exit 1
+    fm_backend_paseo_daemon_check || exit 1
   fi
   if [ "$BACKEND" = cmux ] && [ "$KIND" = secondmate ]; then
     echo "error: backend=cmux does not support --secondmate spawns yet" >&2
@@ -2705,7 +2727,7 @@ else
   WT=""
   BRIEF="$DATA/$ID/brief.md"
 fi
-if [ "$RELAUNCH" -eq 0 ] && [ "$KIND" != secondmate ] && [ "$BACKEND" != orca ]; then
+if [ "$RELAUNCH" -eq 0 ] && [ "$KIND" != secondmate ] && [ "$BACKEND" != orca ] && [ "$BACKEND" != paseo ]; then
   SPAWN_TREEHOUSE_PROJECT_LOCK=$(fm_treehouse_project_lock_path "$PROJ_ABS") || {
     echo "error: could not resolve the shared Treehouse project lock for $PROJ_ABS" >&2
     exit 1
@@ -3463,6 +3485,34 @@ EOF
     fi
     T="$ORCA_TERMINAL"
     ;;
+  paseo)
+    fm_backend_source paseo || exit 1
+    fm_backend_paseo_daemon_check || exit 1
+    if [ "$KIND" = secondmate ]; then
+      WT="$PROJ_ABS"
+      PASEO_WORKSPACE_ID=$(fm_backend_paseo_current_workspace_id "$PWD" 2>/dev/null || true)
+      PASEO_TERMINAL_ID=""
+      if [ -z "$PASEO_WORKSPACE_ID" ]; then
+        echo "error: paseo could not resolve the active workspace for secondmate $ID" >&2
+        exit 1
+      fi
+    else
+      PASEO_WS_RAW=$(fm_backend_paseo_workspace_create "$PROJ_ABS" "$W" "main") || exit 1
+      # The workspace exists as soon as create returns; arm EXIT cleanup before
+      # parsing its response or attempting to start the agent.
+      PASEO_ABORT_CLEANUP=1
+      WT=$(printf '%s' "$PASEO_WS_RAW" | node -e 'try { console.log(JSON.parse(require("fs").readFileSync(0, "utf8")).cwd || ""); } catch(e){}')
+      PASEO_WORKSPACE_ID=$(printf '%s' "$PASEO_WS_RAW" | node -e 'try { console.log(JSON.parse(require("fs").readFileSync(0, "utf8")).workspaceId || ""); } catch(e){}')
+      PASEO_TERMINAL_ID=""
+      if [ -z "$WT" ] || [ -z "$PASEO_WORKSPACE_ID" ]; then
+        echo "error: paseo did not return a worktree path and workspace id for $W" >&2
+        exit 1
+      fi
+      validate_spawn_worktree "paseo workspace create" "$W"
+    fi
+    PASEO_AGENT_ID_SPAWNED=$(fm_backend_paseo_spawn_agent "$ID" "$W" "$WT" "$BRIEF" "$MODEL" "$EFFORT" "$KIND" "${PASEO_WORKSPACE_ID:-}") || exit 1
+    T="$PASEO_AGENT_ID_SPAWNED"
+    ;;
   esac
 fi
 if [ "$KIND" = secondmate ]; then
@@ -3483,6 +3533,7 @@ spawn_send_text_line() { # <target> <text>
   zellij) fm_backend_zellij_send_text_line "$1" "$2" "$W" ;;
   orca) fm_backend_orca_send_text_line "$1" "$2" ;;
   cmux) fm_backend_cmux_send_text_line "$1" "$2" "$W" ;;
+  paseo) ;;
   esac
 }
 spawn_current_path() { # <target>
@@ -3500,6 +3551,7 @@ spawn_send_literal() { # <target> <text>
   zellij) fm_backend_zellij_send_literal "$1" "$2" "$W" ;;
   orca) fm_backend_orca_send_literal "$1" "$2" ;;
   cmux) fm_backend_cmux_send_literal "$1" "$2" "$W" ;;
+  paseo) ;;
   esac
 }
 spawn_send_key() { # <target> <key>
@@ -3509,6 +3561,7 @@ spawn_send_key() { # <target> <key>
   zellij) fm_backend_zellij_send_key "$1" "$2" "$W" ;;
   orca) fm_backend_orca_send_key "$1" "$2" ;;
   cmux) fm_backend_cmux_send_key "$1" "$2" "$W" ;;
+  paseo) ;;
   esac
 }
 
@@ -3741,6 +3794,13 @@ rovo_spawn_fail() { # <detail>
 # the exact terminal is closed: that stops the CLI while its worktree stays
 # for the record's own teardown, which owns worktree deletion.
 rovo_endpoint_cleanup() {
+  if [ "$BACKEND" = paseo ]; then
+    fm_backend_kill "$BACKEND" "$T" || {
+      echo "error: Paseo agent $T could not be cleaned up after spawn failure" >&2
+      return 1
+    }
+    return 0
+  fi
   if [ "$BACKEND" = orca ]; then
     fm_backend_kill orca "$T" 2>/dev/null || true
     return 0
@@ -3839,7 +3899,7 @@ if [ "$RELAUNCH" -eq 1 ]; then
     fi
   fi
   [ "$KIND" = secondmate ] || validate_spawn_worktree "relaunch" "$T"
-elif [ "$KIND" != secondmate ] && [ "$BACKEND" != orca ]; then
+elif [ "$KIND" != secondmate ] && [ "$BACKEND" != orca ] && [ "$BACKEND" != paseo ]; then
   spawn_send_text_line "$WT_TARGET" 'treehouse get'
 
   # Wait for the treehouse subshell: the pane's cwd moves from the project to the worktree.
@@ -4435,6 +4495,7 @@ fi
 
 META_WINDOW=$T
 [ "$BACKEND" = orca ] && META_WINDOW=$W
+[ "$BACKEND" = paseo ] && META_WINDOW=$T
 SPAWN_GEN="s$(date +%s).${BASHPID:-$$}.$RANDOM"
 SPAWN_META_PATH="$STATE/$ID.meta"
 if [ "$SPAWN_META_LOCK_HELD" != 1 ]; then
@@ -4452,7 +4513,7 @@ SPAWN_META_PATH=$SPAWN_META_TMP
 preserve_relaunch_meta() {
   awk -F= '
     BEGIN {
-      split("window endpoint_task_id worktree project harness kind mode yolo tasktmp model effort busy_gen spawn_gen traceparent backend herdr_session herdr_workspace_id herdr_tab_id herdr_pane_id zellij_session zellij_tab_id zellij_pane_id orca_worktree_id terminal cmux_workspace_id cmux_surface_id home projects control_relaunch_tx", keys, " ")
+      split("window endpoint_task_id worktree project harness kind mode yolo tasktmp model effort busy_gen spawn_gen traceparent backend herdr_session herdr_workspace_id herdr_tab_id herdr_pane_id zellij_session zellij_tab_id zellij_pane_id orca_worktree_id paseo_workspace_id terminal cmux_workspace_id cmux_surface_id home projects control_relaunch_tx", keys, " ")
       for (i in keys) owned[keys[i]] = 1
     }
     !($1 in owned)
@@ -4491,6 +4552,10 @@ preserve_relaunch_meta() {
   if [ "$BACKEND" = orca ]; then
     echo "orca_worktree_id=$ORCA_WORKTREE_ID"
     echo "terminal=$ORCA_TERMINAL"
+  fi
+  if [ "$BACKEND" = paseo ]; then
+    echo "paseo_workspace_id=${PASEO_WORKSPACE_ID:-}"
+    echo "terminal=${PASEO_TERMINAL_ID:-}"
   fi
   if [ "$BACKEND" = cmux ]; then
     echo "cmux_workspace_id=$CMUX_WORKSPACE_ID"
@@ -4595,6 +4660,7 @@ if [ "$SPAWN_TASK_SET_LOCK_HELD" = 1 ]; then
 fi
 "$SCRIPT_DIR/fm-home-summary-refresh.sh" --best-effort || true
 [ "$BACKEND" = orca ] && ORCA_ABORT_CLEANUP=0
+[ "$BACKEND" = paseo ] && PASEO_ABORT_CLEANUP=0
 
 sq_brief=$(shell_quote "$BRIEF")
 sq_turnend=$(shell_quote "$TURNEND")
@@ -4721,10 +4787,12 @@ spawn_record_traceparent() {
 # process (go build, go test, ...) inherit it. Sent before the launch command so
 # the env is set when the agent starts; the brief sleep lets the export land.
 spawn_send_text_line "$T" "export GOTMPDIR=$TASK_TMP/gotmp"
+sleep 0.2
 # Export the compact-adviser kill switch into the pane shell through the same
 # pre-launch channel, so later commands in that shell inherit it too. The launch
 # command independently establishes the value for the agent process itself.
 spawn_send_text_line "$T" "export COMPACT_ADVISER_DISABLE=1"
+sleep 0.2
 if [ "$LAVISH_AXI_HOST_CONFIG_PRESENT" = 1 ]; then
   spawn_send_text_line "$T" "export LAVISH_AXI_HOST=$(shell_quote "$LAVISH_AXI_HOST")"
 fi
@@ -4735,6 +4803,7 @@ fi
 # syntax of its own.
 if [ "$KIND" = ship ] || [ "$KIND" = scout ]; then
   spawn_send_text_line "$T" "export FM_TASK_ID=$ID"
+  sleep 0.2
 fi
 # Send through the exact channel that already ships GOTMPDIR, so every backend
 # and harness - ship, scout, and secondmate - gets it before launch. Skipped
