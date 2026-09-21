@@ -595,8 +595,8 @@ process.exit(1);
 }
 
 # Spawn an agent as a native tab in the active Paseo workspace
-fm_backend_paseo_spawn_agent() { # <task_id> <title> <cwd> <brief_file> <model> <effort> <kind> [workspace_id]
-  local task_id=$1 title=$2 cwd=$3 brief_file=$4 model=$5 effort=$6 kind=$7 ws_id=${8:-}
+fm_backend_paseo_spawn_agent() { # <task_id> <title> <cwd> <brief_file> <model> <effort> <kind> [workspace_id] [provider]
+  local task_id=$1 title=$2 cwd=$3 brief_file=$4 model=$5 effort=$6 kind=$7 ws_id=${8:-} provider=${9:-}
   local parent_flag=() out agent_id
 
   if [ -z "$ws_id" ] && [ -n "$cwd" ] && [ -d "$cwd" ]; then
@@ -615,6 +615,17 @@ try {
   fi
   [ -z "${PASEO_AGENT_ID:-}" ] || parent_flag=(--label "paseo.parent-agent-id=$PASEO_AGENT_ID")
 
+  local target_provider="pi"
+  if [ -n "$provider" ]; then
+    case "$provider" in
+      claude*) target_provider="claude" ;;
+      codex*) target_provider="codex" ;;
+      opencode*) target_provider="opencode" ;;
+      cursor*) target_provider="cursor" ;;
+      *) target_provider="$provider" ;;
+    esac
+  fi
+
   local target_model=${model:-antigravity/gemini-3.8-flash}
   [ "$target_model" != "default" ] || target_model="antigravity/gemini-3.8-flash"
   local target_effort=${effort:-medium}
@@ -629,7 +640,7 @@ try {
 
   out=$(paseo agent run \
     --json \
-    --provider pi \
+    --provider "$target_provider" \
     --model "$target_model" \
     --thinking "$target_effort" \
     --cwd "$cwd" \

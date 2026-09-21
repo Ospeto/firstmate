@@ -325,6 +325,22 @@ test_paseo_spawn_agent_extracts_id_and_opens_agent() {
   pass "fm_backend_paseo_spawn_agent: extracts the agent ID and opens it"
 }
 
+test_paseo_spawn_agent_routes_dynamic_provider() {
+  local cwd brief out
+  paseo_case spawn-provider
+  paseo_env
+  cwd="$CASE_DIR/worktree"; brief="$CASE_DIR/brief.md"; mkdir -p "$cwd"
+  printf 'Task: claude spawn\n' > "$brief"
+  printf '{"agentId":"agent-claude"}\n' > "$RESP/1.out"
+  out=$(bash -c \
+    '. "$0/bin/backends/paseo.sh"; fm_backend_paseo_spawn_agent task-claude "Claude title" "$1" "$2" claude-3-5-sonnet high ship ws-claude claude' \
+    "$ROOT" "$cwd" "$brief")
+  [ "$out" = agent-claude ] || fail "spawn should print the extracted agent ID, got '$out'"
+  assert_contains "$(cat "$LOG")" $'--provider\x1fclaude\x1f--model\x1fclaude-3-5-sonnet' \
+    "spawn should route dynamic provider to paseo agent run"
+  pass "fm_backend_paseo_spawn_agent: routes dynamic provider"
+}
+
 test_paseo_spawn_agent_rejects_invalid_json() {
   local cwd brief out status
   paseo_case spawn-invalid-json
@@ -364,4 +380,5 @@ test_paseo_remove_worktree_archives_and_verifies_workspace
 test_paseo_agent_state_treats_archived_idle_as_dead
 test_paseo_busy_state_maps_native_status
 test_paseo_spawn_agent_extracts_id_and_opens_agent
+test_paseo_spawn_agent_routes_dynamic_provider
 test_paseo_spawn_agent_rejects_invalid_json

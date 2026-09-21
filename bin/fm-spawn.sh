@@ -3510,7 +3510,7 @@ EOF
       fi
       validate_spawn_worktree "paseo workspace create" "$W"
     fi
-    PASEO_AGENT_ID_SPAWNED=$(fm_backend_paseo_spawn_agent "$ID" "$W" "$WT" "$BRIEF" "$MODEL" "$EFFORT" "$KIND" "${PASEO_WORKSPACE_ID:-}") || exit 1
+    PASEO_AGENT_ID_SPAWNED=$(fm_backend_paseo_spawn_agent "$ID" "$W" "$WT" "$BRIEF" "$MODEL" "$EFFORT" "$KIND" "${PASEO_WORKSPACE_ID:-}" "${HARNESS:-pi}") || exit 1
     T="$PASEO_AGENT_ID_SPAWNED"
     ;;
   esac
