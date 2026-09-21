@@ -873,7 +873,7 @@ fm_backend_worktree_path() {  # <backend> <worktree-id>
   esac
 }
 
-# fm_backend_busy_state: semantic busy/idle/unknown for backends that expose
+# fm_backend_busy_state: semantic busy/idle/dead/unknown for backends that expose
 # native agent-state (herdr-addendum "busy state" row - the first backend
 # where this gets real semantics beyond pane-regex). Backends with no such
 # primitive (tmux) report unknown. Callers own the fallback policy: fm-watch.sh
@@ -886,6 +886,7 @@ fm_backend_busy_state() {  # <backend> <target>
   fm_backend_source "$backend" || { printf 'unknown'; return 0; }
   case "$backend" in
     herdr) fm_backend_herdr_busy_state "$@" ;;
+    paseo) fm_backend_source paseo && fm_backend_paseo_busy_state "$@" ;;
     *) printf 'unknown' ;;
   esac
 }

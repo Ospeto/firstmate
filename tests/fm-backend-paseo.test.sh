@@ -13,7 +13,7 @@ TMP_ROOT=$(fm_test_tmproot fm-backend-paseo-tests)
 # the real adapter do not consume the response queue, which keeps lifecycle
 # tests readable while still exercising the exact public CLI calls.
 make_paseo_fakebin() {  # <dir> -> echoes fakebin dir
-  local dir=$1 fb="$1/fakebin"
+  local fb="$1/fakebin"
   mkdir -p "$fb"
   cat > "$fb/paseo" <<'SH'
 #!/usr/bin/env bash
@@ -219,6 +219,33 @@ test_paseo_remove_worktree_archives_and_verifies_workspace() {
   pass "fm_backend_paseo_remove_worktree: archives and verifies the workspace"
 }
 
+test_paseo_agent_state_treats_archived_idle_as_dead() {
+  local out
+  paseo_case agent-state-archived-idle
+  paseo_env
+  printf '{"Status":"idle","Archived":true}\n' > "$RESP/1.out"
+  printf '{"Status":"idle","Archived":true}\n' > "$RESP/2.out"
+  out=$(bash -c '. "$0/bin/backends/paseo.sh"; fm_backend_paseo_agent_state agent-archived-idle' "$ROOT")
+  [ "$out" = dead ] || fail "archived idle agent should be dead, got '$out'"
+  pass "fm_backend_paseo_agent_state: archived idle agents are dead"
+}
+
+assert_paseo_busy_state() {  # <name> <json> <expected>
+  local name=$1 json=$2 expected=$3 out
+  paseo_case "busy-state-$name"
+  paseo_env
+  printf '%s\n' "$json" > "$RESP/1.out"
+  out=$(bash -c '. "$0/bin/backends/paseo.sh"; fm_backend_paseo_busy_state agent-busy-state' "$ROOT")
+  [ "$out" = "$expected" ] || fail "Paseo $name state should be $expected, got '$out'"
+}
+
+test_paseo_busy_state_maps_native_status() {
+  assert_paseo_busy_state running '{"Status":"running","Archived":false}' busy
+  assert_paseo_busy_state idle '{"Status":"idle","Archived":false}' idle
+  assert_paseo_busy_state archived '{"Status":"idle","archived":true}' dead
+  pass "fm_backend_paseo_busy_state: maps running, idle, and archived agents"
+}
+
 test_paseo_spawn_agent_extracts_id_and_opens_agent() {
   local cwd brief out
   paseo_case spawn
@@ -277,5 +304,7 @@ test_paseo_agent_belongs_to_task_rejects_mismatch
 test_paseo_kill_stops_archives_and_verifies_agent
 test_paseo_kill_accepts_already_archived_agent_without_lifecycle_calls
 test_paseo_remove_worktree_archives_and_verifies_workspace
+test_paseo_agent_state_treats_archived_idle_as_dead
+test_paseo_busy_state_maps_native_status
 test_paseo_spawn_agent_extracts_id_and_opens_agent
 test_paseo_spawn_agent_rejects_invalid_json

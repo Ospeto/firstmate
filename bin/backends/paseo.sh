@@ -179,9 +179,11 @@ fm_backend_paseo_agent_state() {  # <target>
 const fs = require("fs");
 try {
   const data = JSON.parse(fs.readFileSync(0, "utf8"));
-  if (data.Status === "closed") {
+  const status = data.Status ?? data.status;
+  const archived = data.Archived === true || data.archived === true;
+  if (archived || status === "closed") {
     process.stdout.write("dead");
-  } else if (data.Status === "running" || data.Status === "idle") {
+  } else if (status === "running" || status === "idle") {
     process.stdout.write("alive");
   } else {
     process.stdout.write("dead");
@@ -199,6 +201,34 @@ try {
   else
     printf 'missing'
   fi
+}
+
+# Semantic native agent state: busy, idle, dead, unknown
+fm_backend_paseo_busy_state() {  # <target>
+  local target=$1 out
+  [ -n "$target" ] || { printf 'unknown'; return 0; }
+  fm_backend_paseo_tool_check || { printf 'unknown'; return 0; }
+
+  out=$(paseo inspect "$target" --json 2>/dev/null) || { printf 'unknown'; return 0; }
+  printf '%s' "$out" | node -e '
+const fs = require("fs");
+try {
+  const data = JSON.parse(fs.readFileSync(0, "utf8"));
+  const status = data.Status ?? data.status;
+  const archived = data.Archived === true || data.archived === true;
+  if (archived || status === "closed") {
+    process.stdout.write("dead");
+  } else if (status === "running") {
+    process.stdout.write("busy");
+  } else if (status === "idle") {
+    process.stdout.write("idle");
+  } else {
+    process.stdout.write("unknown");
+  }
+} catch (e) {
+  process.stdout.write("unknown");
+}
+'
 }
 
 # Capture output from Paseo terminal or agent

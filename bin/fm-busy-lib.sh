@@ -42,13 +42,13 @@
 #   fm-interrupt     the legacy Claude fm-send --key Escape idle event
 #   fm-recovery      a documented recovery reset after relaunch
 # Classifier-only sources (never written into a record):
-#   endpoint-gone, herdr-native, grok-regex, rovo-regex, agy-regex, muse-session-log,
-#   cursor-transcript, missing, malformed, gen-mismatch, source-mismatch,
-#   kimi-unverified, codex-unverified, capture-failed, no-target
+#   endpoint-gone, paseo-native, herdr-native, grok-regex, rovo-regex, agy-regex,
+#   muse-session-log, cursor-transcript, missing, malformed, gen-mismatch,
+#   source-mismatch, kimi-unverified, codex-unverified, capture-failed, no-target
 #
 # Classification (fm_busy_classify): busy | idle | unknown | dead, always
 # with the producing source as the second token. Precedence:
-#   1. dead endpoint (fm_busy_classify_live only) -> dead endpoint-gone
+#   1. dead endpoint (fm_busy_classify_live) or authoritative Paseo native state
 #   2. standalone Kimi before verification       -> unknown kimi-unverified
 #   3. a valid, gen-matching, source-trusted record -> its state and source
 #   4. no record at all: herdr's native busy verdict is trusted as busy
@@ -869,13 +869,25 @@ fm_busy_agy_tail_busy() {
 
 # fm_busy_classify: semantic classification for a task whose endpoint the
 # caller has already established as present. Prints "<verdict> <source>":
-# busy|idle|unknown plus the producing source (see header). Never probes
+# busy|idle|unknown|dead plus the producing source (see header). Never probes
 # process state. <tail40> is optional pre-captured plain output used only by
 # the grok, rovo, and agy arms; when absent each captures through
 # fm_backend_capture if available, else reports unknown capture-failed.
 fm_busy_classify() {  # <backend> <target> <harness> <id> <state-dir> [tail40]
   local backend=$1 target=$2 harness=$3 id=$4 state=$5 tail40=${6-}
   local out rc r_state r_source native log
+  # Paseo's inspect state is authoritative for its native agent lifecycle. It
+  # must outrank the spawn seed so an idle or archived agent cannot remain busy
+  # merely because no later semantic hook event reached Firstmate.
+  if [ "$backend" = paseo ] && command -v fm_backend_busy_state >/dev/null 2>&1; then
+    native=$(fm_backend_busy_state "$backend" "$target" 2>/dev/null || true)
+    case "$native" in
+      busy|idle|dead)
+        printf '%s paseo-native' "$native"
+        return 0
+        ;;
+    esac
+  fi
   case "$harness" in
     kimi*)
       if ! fm_busy_kimi_verified; then

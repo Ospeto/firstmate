@@ -1141,7 +1141,7 @@ fi
 # liveness, so a finished-but-pane-closed crew never reaches here. Down here there
 # is no run to consult, so only positive evidence that the target is gone may
 # read as death - a backend that failed to answer is unknown, never death, for
-# both classifier-backed backends (tmux and herdr) - and every death-class
+# every classifier-backed backend (tmux, herdr, and Paseo) - and every death-class
 # verdict reports unknown rather than trusting a possibly-stale status log as
 # the current state.
 [ -n "$BACKEND_TARGET" ] || emit unknown none "no backend target recorded"
@@ -1159,12 +1159,14 @@ if ! pane_readable "$BACKEND_TARGET"; then
   #             fm_backend_tmux_agent_state owns as death, since fm-bootstrap
   #             and fm-session-start depend on it to license a respawn after a
   #             genuine server death - a socket-connection failure is NOT
-  #             covered by the unknown-never-death rule above).
+  #             covered by the unknown-never-death rule above), or Paseo can no
+  #             longer inspect the recorded agent.
   #   dead    - the endpoint exists but confidently has no agent (herdr's agent
   #             get answered agent_not_found, or its registration lingers over a
   #             pane whose processes are nothing but shells - issue #4115;
   #             tmux's readable foreground process group is nothing but
-  #             shells), still positive death evidence.
+  #             shells), or Paseo reports the agent closed or archived; all are
+  #             still positive death evidence.
   #   alive   - the endpoint and its agent answered and only the heavy
   #             scrollback read failed, so the live state is classified by the
   #             normal flow below instead of being discarded.
@@ -1173,19 +1175,22 @@ if ! pane_readable "$BACKEND_TARGET"; then
   # Backends with no classifier (orca, zellij, and cmux all report unverified)
   # keep their historical capture-failure-means-gone reading.
   case "$TASK_BACKEND" in
-    tmux|herdr) AGENT_STATE=$(fm_backend_agent_state "$TASK_BACKEND" "$BACKEND_TARGET") ;;
+    tmux|herdr|paseo) AGENT_STATE=$(fm_backend_agent_state "$TASK_BACKEND" "$BACKEND_TARGET") ;;
     *) AGENT_STATE=none ;;
   esac
   case "$TASK_BACKEND:$AGENT_STATE" in
-    tmux:alive|herdr:alive)
+    tmux:alive|herdr:alive|paseo:alive)
       ;;
-    tmux:missing|herdr:missing)
+    tmux:missing|herdr:missing|paseo:missing)
       emit unknown none "backend target gone: $BACKEND_TARGET"
+      ;;
+    paseo:dead)
+      emit unknown none "backend target gone: $BACKEND_TARGET (agent gone / archived)"
       ;;
     tmux:dead|herdr:dead)
       emit unknown none "backend target gone: $BACKEND_TARGET (agent gone, pane shell remains)"
       ;;
-    tmux:*|herdr:*)
+    tmux:*|herdr:*|paseo:*)
       emit unknown none "backend unreachable ($TASK_BACKEND endpoint state: $AGENT_STATE)"
       ;;
     *)
