@@ -185,6 +185,33 @@ test_paseo_agent_belongs_to_task_accepts_secondmate_format_and_tilde_cwd() {
   pass "fm_backend_paseo_agent_belongs_to_task: accepts secondmate name and tilde cwd"
 }
 
+test_paseo_agent_belongs_to_task_rejects_conflicting_label_even_with_matching_title() {
+  local worktree status
+  paseo_case belongs-conflicting-label
+  paseo_env
+  worktree="$CASE_DIR/worktree"; mkdir -p "$worktree"
+  printf '{"labels":["firstmate_task=rogue-task"],"title":"fm-target-task","cwd":"%s","workspaceId":"ws-label"}\n' "$worktree" > "$RESP/1.out"
+  set +e
+  bash -c '. "$0/bin/backends/paseo.sh"; fm_backend_paseo_agent_belongs_to_task agent-conflicting target-task "$1" ws-label' "$ROOT" "$worktree"
+  status=$?
+  set -e
+  [ "$status" -ne 0 ] || fail "ownership check must reject agent when firstmate_task label contradicts task id even if title matches"
+  pass "fm_backend_paseo_agent_belongs_to_task: rejects conflicting label even with matching title"
+}
+
+test_paseo_agent_belongs_to_task_resolves_symlinks_in_cwd() {
+  local real_dir symlink_dir
+  paseo_case belongs-symlink
+  paseo_env
+  real_dir="$CASE_DIR/real_worktree"; mkdir -p "$real_dir"
+  symlink_dir="$CASE_DIR/symlink_worktree"
+  ln -s "$real_dir" "$symlink_dir"
+  printf '{"labels":["firstmate_task=symlink-task"],"cwd":"%s","workspaceId":"ws-sym"}\n' "$symlink_dir" > "$RESP/1.out"
+  bash -c '. "$0/bin/backends/paseo.sh"; fm_backend_paseo_agent_belongs_to_task agent-sym symlink-task "$1" ws-sym' "$ROOT" "$real_dir"
+  expect_code 0 $? "realpath resolution should match physical directory across symlinks"
+  pass "fm_backend_paseo_agent_belongs_to_task: resolves physical paths across symlinks"
+}
+
 test_paseo_kill_stops_archives_and_verifies_agent() {
   paseo_case kill
   paseo_env
@@ -313,6 +340,8 @@ test_paseo_agent_belongs_to_task_accepts_matching_label
 test_paseo_agent_belongs_to_task_accepts_matching_title
 test_paseo_agent_belongs_to_task_accepts_normalized_matching_cwd
 test_paseo_agent_belongs_to_task_accepts_secondmate_format_and_tilde_cwd
+test_paseo_agent_belongs_to_task_rejects_conflicting_label_even_with_matching_title
+test_paseo_agent_belongs_to_task_resolves_symlinks_in_cwd
 test_paseo_agent_belongs_to_task_rejects_mismatch
 test_paseo_kill_stops_archives_and_verifies_agent
 test_paseo_kill_accepts_already_archived_agent_without_lifecycle_calls

@@ -430,7 +430,16 @@ fm_backend_validate_task_endpoint() {  # <meta-file> <task-id>
     echo "REFUSED: task $id has a missing, empty, or ambiguous project identity; preserving task state." >&2
     return 1
   }
-  kind=$(fm_backend_meta_exact_value "$meta" kind 2>/dev/null || true)
+  local kind_count
+  kind_count=$(grep -c '^kind=' "$meta" 2>/dev/null || true)
+  case "$kind_count" in
+    0) kind=ship ;;
+    1) kind=$(fm_backend_meta_exact_value "$meta" kind) || kind= ;;
+    *)
+      echo "REFUSED: task $id has duplicate or malformed kind metadata; preserving task state." >&2
+      return 1
+      ;;
+  esac
   case "$worktree$project$window" in *$'\n'*|*$'\r'*|*$'\t'*)
     echo "REFUSED: task $id has malformed endpoint metadata; preserving task state." >&2
     return 1
@@ -537,7 +546,16 @@ fm_backend_validate_task_endpoint() {  # <meta-file> <task-id>
         echo "REFUSED: Paseo endpoint metadata for task $id lacks an exact task binding; preserving task state." >&2
         return 1
       }
-      worktree_id=$(fm_backend_meta_exact_value "$meta" paseo_workspace_id 2>/dev/null || true)
+      local ws_id_count
+      ws_id_count=$(grep -c '^paseo_workspace_id=' "$meta" 2>/dev/null || true)
+      case "$ws_id_count" in
+        0) worktree_id= ;;
+        1) worktree_id=$(fm_backend_meta_exact_value "$meta" paseo_workspace_id) || worktree_id= ;;
+        *)
+          echo "REFUSED: Paseo endpoint metadata for task $id has duplicate workspace ID fields; preserving task state." >&2
+          return 1
+          ;;
+      esac
       if [ -z "$window" ]; then
         echo "REFUSED: Paseo endpoint metadata for task $id lacks an agent ID; preserving task state." >&2
         return 1
@@ -549,6 +567,11 @@ fm_backend_validate_task_endpoint() {  # <meta-file> <task-id>
         fi
         if ! fm_backend_endpoint_atom_valid "$worktree_id"; then
           echo "REFUSED: Paseo workspace identity for task $id is malformed; preserving task state." >&2
+          return 1
+        fi
+      elif [ -n "$worktree_id" ]; then
+        if ! fm_backend_endpoint_atom_valid "$worktree_id"; then
+          echo "REFUSED: Paseo workspace identity for secondmate $id is malformed; preserving task state." >&2
           return 1
         fi
       fi

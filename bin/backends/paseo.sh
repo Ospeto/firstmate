@@ -98,27 +98,39 @@ try {
   process.exit(1);
 }
 const first = (...values) => values.find(value => value !== undefined && value !== null);
-const labels = first(data.labels, data.Labels, data.agent?.labels, data.agent?.Labels);
-const expectedLabel = "firstmate_task=" + expectedTask;
+const rawLabels = first(data.labels, data.Labels, data.agent?.labels, data.agent?.Labels);
+let hasTaskLabel = false;
 let labelOwned = false;
-if (Array.isArray(labels)) {
-  labelOwned = labels.some(label => label === expectedLabel || (
-    label && typeof label === "object" &&
-    (label.key === "firstmate_task" || label.Key === "firstmate_task") &&
-    (label.value === expectedTask || label.Value === expectedTask)
-  ));
-} else if (labels && typeof labels === "object") {
-  labelOwned = labels.firstmate_task === expectedTask || labels.FirstmateTask === expectedTask;
+
+if (Array.isArray(rawLabels)) {
+  for (const label of rawLabels) {
+    if (typeof label === "string" && label.startsWith("firstmate_task=")) {
+      hasTaskLabel = true;
+      if (label === "firstmate_task=" + expectedTask) labelOwned = true;
+    } else if (label && typeof label === "object" && (label.key === "firstmate_task" || label.Key === "firstmate_task")) {
+      hasTaskLabel = true;
+      if (label.value === expectedTask || label.Value === expectedTask) labelOwned = true;
+    }
+  }
+} else if (rawLabels && typeof rawLabels === "object") {
+  if (rawLabels.firstmate_task !== undefined || rawLabels.FirstmateTask !== undefined) {
+    hasTaskLabel = true;
+    if (rawLabels.firstmate_task === expectedTask || rawLabels.FirstmateTask === expectedTask) labelOwned = true;
+  }
 }
+
 const name = String(first(data.name, data.Name, data.agent?.name, data.agent?.Name) || "");
 const title = String(first(data.title, data.Title, data.agent?.title, data.agent?.Title) || "");
-const identityOwned = labelOwned ||
+const fallbackOwned =
   name === expectedTask ||
   name === "fm-" + expectedTask ||
   name === expectedTask + " (Secondmate)" ||
   title === expectedTask ||
   title === "fm-" + expectedTask ||
   title === expectedTask + " (Secondmate)";
+
+// Exact task label takes absolute precedence; name/title is fallback only when no label exists
+const identityOwned = hasTaskLabel ? labelOwned : fallbackOwned;
 
 const expandHome = value => {
   if (typeof value !== "string" || !value) return "";
@@ -131,7 +143,11 @@ const expandHome = value => {
 const normalize = value => {
   const expanded = expandHome(value);
   if (!expanded || !path.isAbsolute(expanded)) return "";
-  return path.normalize(path.resolve(expanded));
+  try {
+    return fs.realpathSync(expanded);
+  } catch (e) {
+    return path.normalize(path.resolve(expanded));
+  }
 };
 
 const actualCwd = first(data.cwd, data.Cwd, data.agent?.cwd, data.agent?.Cwd);
