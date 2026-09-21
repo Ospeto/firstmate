@@ -1,0 +1,6 @@
+{
+  "id": "firstmate-paseo",
+  "requirements": {
+    "paseo": ">=0.8.0"
+  }
+}
