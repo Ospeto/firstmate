@@ -212,6 +212,20 @@ test_paseo_agent_belongs_to_task_resolves_symlinks_in_cwd() {
   pass "fm_backend_paseo_agent_belongs_to_task: resolves physical paths across symlinks"
 }
 
+test_paseo_agent_belongs_to_task_rejects_mixed_labels() {
+  local worktree status
+  paseo_case belongs-mixed-labels
+  paseo_env
+  worktree="$CASE_DIR/worktree"; mkdir -p "$worktree"
+  printf '{"labels":["firstmate_task=correct-task","firstmate_task=contradictory-task"],"cwd":"%s","workspaceId":"ws-label"}\n' "$worktree" > "$RESP/1.out"
+  set +e
+  bash -c '. "$0/bin/backends/paseo.sh"; fm_backend_paseo_agent_belongs_to_task agent-mixed correct-task "$1" ws-label' "$ROOT" "$worktree"
+  status=$?
+  set -e
+  [ "$status" -ne 0 ] || fail "ownership check must reject agent when contradictory task labels are present"
+  pass "fm_backend_paseo_agent_belongs_to_task: rejects mixed contradictory labels"
+}
+
 test_paseo_kill_stops_archives_and_verifies_agent() {
   paseo_case kill
   paseo_env
@@ -342,6 +356,7 @@ test_paseo_agent_belongs_to_task_accepts_normalized_matching_cwd
 test_paseo_agent_belongs_to_task_accepts_secondmate_format_and_tilde_cwd
 test_paseo_agent_belongs_to_task_rejects_conflicting_label_even_with_matching_title
 test_paseo_agent_belongs_to_task_resolves_symlinks_in_cwd
+test_paseo_agent_belongs_to_task_rejects_mixed_labels
 test_paseo_agent_belongs_to_task_rejects_mismatch
 test_paseo_kill_stops_archives_and_verifies_agent
 test_paseo_kill_accepts_already_archived_agent_without_lifecycle_calls

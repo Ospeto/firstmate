@@ -99,24 +99,32 @@ try {
 }
 const first = (...values) => values.find(value => value !== undefined && value !== null);
 const rawLabels = first(data.labels, data.Labels, data.agent?.labels, data.agent?.Labels);
-let hasTaskLabel = false;
-let labelOwned = false;
+let hasMatchingTaskLabel = false;
+let hasConflictingTaskLabel = false;
 
 if (Array.isArray(rawLabels)) {
   for (const label of rawLabels) {
     if (typeof label === "string" && label.startsWith("firstmate_task=")) {
-      hasTaskLabel = true;
-      if (label === "firstmate_task=" + expectedTask) labelOwned = true;
+      const val = label.slice("firstmate_task=".length);
+      if (val === expectedTask) hasMatchingTaskLabel = true;
+      else hasConflictingTaskLabel = true;
     } else if (label && typeof label === "object" && (label.key === "firstmate_task" || label.Key === "firstmate_task")) {
-      hasTaskLabel = true;
-      if (label.value === expectedTask || label.Value === expectedTask) labelOwned = true;
+      const val = label.value ?? label.Value;
+      if (val === expectedTask) hasMatchingTaskLabel = true;
+      else hasConflictingTaskLabel = true;
     }
   }
 } else if (rawLabels && typeof rawLabels === "object") {
-  if (rawLabels.firstmate_task !== undefined || rawLabels.FirstmateTask !== undefined) {
-    hasTaskLabel = true;
-    if (rawLabels.firstmate_task === expectedTask || rawLabels.FirstmateTask === expectedTask) labelOwned = true;
+  const val = rawLabels.firstmate_task ?? rawLabels.FirstmateTask;
+  if (val !== undefined) {
+    if (val === expectedTask) hasMatchingTaskLabel = true;
+    else hasConflictingTaskLabel = true;
   }
+}
+
+// Any contradictory task label fails closed immediately
+if (hasConflictingTaskLabel) {
+  process.exit(1);
 }
 
 const name = String(first(data.name, data.Name, data.agent?.name, data.agent?.Name) || "");
@@ -129,8 +137,8 @@ const fallbackOwned =
   title === "fm-" + expectedTask ||
   title === expectedTask + " (Secondmate)";
 
-// Exact task label takes absolute precedence; name/title is fallback only when no label exists
-const identityOwned = hasTaskLabel ? labelOwned : fallbackOwned;
+// Exact task label takes absolute precedence; fallback only when NO task label was set
+const identityOwned = hasMatchingTaskLabel ? true : fallbackOwned;
 
 const expandHome = value => {
   if (typeof value !== "string" || !value) return "";
@@ -380,6 +388,7 @@ fm_backend_paseo_send_key() {  # <target> <key> [expected-label]
     C-c) paseo terminal send-keys "$target" "^C" >/dev/null 2>&1 || true ;;
     Enter) paseo terminal send-keys "$target" Enter >/dev/null 2>&1 || true ;;
     Escape) paseo terminal send-keys "$target" Escape >/dev/null 2>&1 || true ;;
+    C-u) paseo terminal send-keys "$target" "^U" >/dev/null 2>&1 || true ;;
   esac
 }
 

@@ -199,7 +199,7 @@ fm_control_exit_command() {  # <harness>
 fm_control_backend_supports_key() {  # <backend> <key>
   local backend=${1-} key=${2-}
   case "$backend" in
-    tmux|herdr|zellij|cmux)
+    tmux|herdr|zellij|cmux|paseo)
       case "$key" in Escape|Enter|C-c|C-u) return 0 ;; esac
       ;;
     orca)
@@ -216,7 +216,7 @@ fm_control_backend_supports_key() {  # <backend> <key>
 # transition as success.
 fm_control_backend_state_verified() {  # <backend>
   case "${1-}" in
-    tmux|herdr) return 0 ;;
+    tmux|herdr|paseo) return 0 ;;
   esac
   return 1
 }
@@ -278,6 +278,14 @@ fm_control_endpoint_absence_verdict() {  # <backend> <target>
         alive) printf 'alive\t' ;;
         missing) printf 'gone\t' ;;
         *) printf 'unproven\tthe recorded herdr session'"'"'s server could not be started, or its pane could not be classified once it was running' ;;
+      esac
+      ;;
+    paseo)
+      case "$(fm_backend_agent_state "$backend" "$target")" in
+        missing) printf 'gone\t' ;;
+        dead) printf 'dead\t' ;;
+        alive) printf 'alive\t' ;;
+        *) printf 'unproven\tthe Paseo daemon could not verify agent status for target %s' "$target" ;;
       esac
       ;;
     *)

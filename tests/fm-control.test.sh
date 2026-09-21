@@ -438,9 +438,10 @@ test_unverified_state_backends_refuse_stop_verbs() {
   pass "fm-control: a backend that cannot prove an agent stopped refuses exit and relaunch"
 }
 
-test_state_verified_backends_are_exactly_tmux_and_herdr() {
+test_state_verified_backends_are_exactly_tmux_herdr_and_paseo() {
   fm_control_backend_state_verified tmux || fail "tmux has a recovery-grade classifier"
   fm_control_backend_state_verified herdr || fail "herdr has a recovery-grade classifier"
+  fm_control_backend_state_verified paseo || fail "paseo has a recovery-grade classifier"
   local backend
   for backend in zellij orca cmux; do
     fm_control_backend_state_verified "$backend" \
@@ -897,7 +898,7 @@ test_backend_key_capability_matrix
 test_harness_kind_capability
 test_orca_refuses_an_escape_harness_interrupt
 test_unverified_state_backends_refuse_stop_verbs
-test_state_verified_backends_are_exactly_tmux_and_herdr
+test_state_verified_backends_are_exactly_tmux_herdr_and_paseo
 test_window_label_is_refused_with_the_exact_id
 test_explicit_endpoint_is_refused
 test_unknown_task_is_refused
