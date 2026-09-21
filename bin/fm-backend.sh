@@ -406,7 +406,7 @@ fm_backend_orca_worktree_id_valid() {  # <value>
 }
 
 fm_backend_validate_task_endpoint() {  # <meta-file> <task-id>
-  local meta=$1 id=$2 backend_count backend window worktree project binding_count binding worktree_id
+  local meta=$1 id=$2 backend_count backend window worktree project binding_count binding worktree_id kind
   local session pane recorded_session workspace tab terminal surface
   FM_BACKEND_VALIDATED_BACKEND=
   FM_BACKEND_VALIDATED_TARGET=
@@ -430,6 +430,7 @@ fm_backend_validate_task_endpoint() {  # <meta-file> <task-id>
     echo "REFUSED: task $id has a missing, empty, or ambiguous project identity; preserving task state." >&2
     return 1
   }
+  kind=$(fm_backend_meta_exact_value "$meta" kind 2>/dev/null || true)
   case "$worktree$project$window" in *$'\n'*|*$'\r'*|*$'\t'*)
     echo "REFUSED: task $id has malformed endpoint metadata; preserving task state." >&2
     return 1
@@ -536,14 +537,20 @@ fm_backend_validate_task_endpoint() {  # <meta-file> <task-id>
         echo "REFUSED: Paseo endpoint metadata for task $id lacks an exact task binding; preserving task state." >&2
         return 1
       }
-      worktree_id=$(fm_backend_meta_exact_value "$meta" paseo_workspace_id) || worktree_id=
-      if [ -z "$worktree_id" ] || [ -z "$window" ]; then
-        echo "REFUSED: Paseo endpoint metadata for task $id lacks an agent ID or workspace ID; preserving task state." >&2
+      worktree_id=$(fm_backend_meta_exact_value "$meta" paseo_workspace_id 2>/dev/null || true)
+      if [ -z "$window" ]; then
+        echo "REFUSED: Paseo endpoint metadata for task $id lacks an agent ID; preserving task state." >&2
         return 1
       fi
-      if ! fm_backend_endpoint_atom_valid "$worktree_id"; then
-        echo "REFUSED: Paseo workspace identity for task $id is malformed; preserving task state." >&2
-        return 1
+      if [ "$kind" != "secondmate" ]; then
+        if [ -z "$worktree_id" ]; then
+          echo "REFUSED: Paseo endpoint metadata for task $id lacks a workspace ID; preserving task state." >&2
+          return 1
+        fi
+        if ! fm_backend_endpoint_atom_valid "$worktree_id"; then
+          echo "REFUSED: Paseo workspace identity for task $id is malformed; preserving task state." >&2
+          return 1
+        fi
       fi
       fm_backend_source paseo || {
         echo "REFUSED: Paseo adapter is unavailable for task $id endpoint validation; preserving task state." >&2

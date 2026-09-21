@@ -173,6 +173,18 @@ test_paseo_agent_belongs_to_task_rejects_mismatch() {
   pass "fm_backend_paseo_agent_belongs_to_task: rejects cwd mismatch"
 }
 
+test_paseo_agent_belongs_to_task_accepts_secondmate_format_and_tilde_cwd() {
+  local home
+  paseo_case belongs-secondmate
+  paseo_env
+  home="$HOME/.firstmate-test-home-$$"; mkdir -p "$home"
+  printf '{"Name":"vo-mate (Secondmate)","Cwd":"~/.firstmate-test-home-%s"}\n' "$$" > "$RESP/1.out"
+  bash -c '. "$0/bin/backends/paseo.sh"; fm_backend_paseo_agent_belongs_to_task agent-sm vo-mate "$1"' "$ROOT" "$home"
+  expect_code 0 $? "secondmate title format and tilde cwd without workspace should prove ownership"
+  rm -rf "$home"
+  pass "fm_backend_paseo_agent_belongs_to_task: accepts secondmate name and tilde cwd"
+}
+
 test_paseo_kill_stops_archives_and_verifies_agent() {
   paseo_case kill
   paseo_env
@@ -300,6 +312,7 @@ test_paseo_daemon_check_rejects_unavailable_daemon
 test_paseo_agent_belongs_to_task_accepts_matching_label
 test_paseo_agent_belongs_to_task_accepts_matching_title
 test_paseo_agent_belongs_to_task_accepts_normalized_matching_cwd
+test_paseo_agent_belongs_to_task_accepts_secondmate_format_and_tilde_cwd
 test_paseo_agent_belongs_to_task_rejects_mismatch
 test_paseo_kill_stops_archives_and_verifies_agent
 test_paseo_kill_accepts_already_archived_agent_without_lifecycle_calls

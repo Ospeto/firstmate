@@ -81,15 +81,15 @@ fm_backend_paseo_is_agent() {  # <target>
 }
 
 # Validate that a native agent is owned by one exact Firstmate task and workspace.
-fm_backend_paseo_agent_belongs_to_task() {  # <agent-id> <task-id> <worktree> <workspace-id>
+fm_backend_paseo_agent_belongs_to_task() {  # <agent-id> <task-id> <worktree> [workspace-id]
   local agent_id=${1:-} task_id=${2:-} recorded_worktree=${3:-} expected_workspace=${4:-} out
   [ -n "$agent_id" ] || return 1
   [ -n "$recorded_worktree" ] || return 1
-  [ -n "$expected_workspace" ] || return 1
   out=$(paseo inspect "$agent_id" --json 2>/dev/null) || return 1
   printf '%s' "$out" | node -e '
 const fs = require("fs");
 const path = require("path");
+const os = require("os");
 const [expectedTask, recordedWorktree, expectedWorkspace] = process.argv.slice(1);
 let data;
 try {
@@ -110,9 +110,30 @@ if (Array.isArray(labels)) {
 } else if (labels && typeof labels === "object") {
   labelOwned = labels.firstmate_task === expectedTask || labels.FirstmateTask === expectedTask;
 }
-const name = first(data.name, data.Name, data.agent?.name, data.agent?.Name) || "";
-const title = first(data.title, data.Title, data.agent?.title, data.agent?.Title) || "";
-const identityOwned = labelOwned || name === "fm-" + expectedTask || title === "fm-" + expectedTask;
+const name = String(first(data.name, data.Name, data.agent?.name, data.agent?.Name) || "");
+const title = String(first(data.title, data.Title, data.agent?.title, data.agent?.Title) || "");
+const identityOwned = labelOwned ||
+  name === expectedTask ||
+  name === "fm-" + expectedTask ||
+  name === expectedTask + " (Secondmate)" ||
+  title === expectedTask ||
+  title === "fm-" + expectedTask ||
+  title === expectedTask + " (Secondmate)";
+
+const expandHome = value => {
+  if (typeof value !== "string" || !value) return "";
+  if (value === "~") return os.homedir();
+  if (value.startsWith("~/") || value.startsWith("~\\")) {
+    return path.join(os.homedir(), value.slice(2));
+  }
+  return value;
+};
+const normalize = value => {
+  const expanded = expandHome(value);
+  if (!expanded || !path.isAbsolute(expanded)) return "";
+  return path.normalize(path.resolve(expanded));
+};
+
 const actualCwd = first(data.cwd, data.Cwd, data.agent?.cwd, data.agent?.Cwd);
 let actualWorkspace = first(
   data.workspaceId, data.WorkspaceId, data.workspace_id,
@@ -122,10 +143,7 @@ let actualWorkspace = first(
   data.agent?.workspace?.workspaceId, data.agent?.workspace?.id,
   data.agent?.Workspace?.WorkspaceId, data.agent?.Workspace?.Id
 );
-const normalize = value => {
-  if (typeof value !== "string" || !path.isAbsolute(value)) return "";
-  return path.normalize(path.resolve(value));
-};
+
 if (!actualWorkspace && actualCwd) {
   try {
     const cp = require("child_process");
@@ -134,12 +152,20 @@ if (!actualWorkspace && actualCwd) {
     if (ws && (ws.workspaceId || ws.id)) actualWorkspace = ws.workspaceId || ws.id;
   } catch (e) {}
 }
-if (!identityOwned || typeof actualWorkspace !== "string" || actualWorkspace !== expectedWorkspace ||
-    normalize(actualCwd) === "" || normalize(recordedWorktree) === "" ||
-    normalize(actualCwd) !== normalize(recordedWorktree)) {
+
+const normActualCwd = normalize(actualCwd);
+const normRecordedWorktree = normalize(recordedWorktree);
+
+if (!identityOwned || normActualCwd === "" || normRecordedWorktree === "" || normActualCwd !== normRecordedWorktree) {
   process.exit(1);
 }
-' "$task_id" "$recorded_worktree" "$expected_workspace"
+
+if (expectedWorkspace && expectedWorkspace.trim() !== "") {
+  if (typeof actualWorkspace !== "string" || actualWorkspace !== expectedWorkspace) {
+    process.exit(1);
+  }
+}
+' "$task_id" "$recorded_worktree" "${expected_workspace:-}"
 }
 
 # Target exists in Paseo
