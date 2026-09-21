@@ -1,5 +1,5 @@
 import type { RpcInput } from "@getpaseo/plugin";
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { backlogRpc, fleetStatusRpc, taskLogsRpc } from "../shared/firstmate";
@@ -413,8 +413,9 @@ export function getBacklog(input: RpcInput<typeof backlogRpc>) {
   try {
     const axiScript = resolve(root, "bin/fm-tasks-axi.sh");
     if (existsSync(axiScript)) {
-      const output = execSync(
-        `"${axiScript}" list --fields blocked_by,priority,held,hold_reason`,
+      const output = execFileSync(
+        axiScript,
+        ["list", "--fields", "blocked_by,priority,held,hold_reason"],
         {
           cwd: root,
           encoding: "utf8",
@@ -616,10 +617,12 @@ export async function getFleetStatus(input: RpcInput<typeof fleetStatusRpc>) {
   // 5. Try bounded snapshot to enrich recent landed
   let recentLanded: Array<{ id: string; what: string; artifact: string; owner: string }> = [];
   try {
-    const snapshotRaw = execSync("bin/fm-bearings-snapshot.sh --json", {
+    const snapshotScript = resolve(root, "bin/fm-bearings-snapshot.sh");
+    const snapshotRaw = execFileSync(snapshotScript, ["--json"], {
       cwd: root,
       encoding: "utf8",
       timeout: 3000,
+      env: { ...process.env, FM_ROOT: root },
     });
     const snapshotJson = JSON.parse(snapshotRaw);
 

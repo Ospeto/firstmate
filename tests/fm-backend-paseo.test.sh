@@ -48,10 +48,10 @@ esac
 COUNT_FILE="$RESP/.count"
 next=$(( $(cat "$COUNT_FILE" 2>/dev/null || printf '0') + 1 ))
 echo "$next" > "$COUNT_FILE"
+[ -f "$RESP/$next.out" ] && cat "$RESP/$next.out"
 if [ -f "$RESP/$next.exit" ]; then
   exit "$(cat "$RESP/$next.exit")"
 fi
-[ -f "$RESP/$next.out" ] && cat "$RESP/$next.out"
 exit 0
 SH
   chmod +x "$fb/paseo"
@@ -277,10 +277,75 @@ test_paseo_agent_state_treats_archived_idle_as_dead() {
   paseo_case agent-state-archived-idle
   paseo_env
   printf '{"Status":"idle","Archived":true}\n' > "$RESP/1.out"
-  printf '{"Status":"idle","Archived":true}\n' > "$RESP/2.out"
   out=$(bash -c '. "$0/bin/backends/paseo.sh"; fm_backend_paseo_agent_state agent-archived-idle' "$ROOT")
   [ "$out" = dead ] || fail "archived idle agent should be dead, got '$out'"
   pass "fm_backend_paseo_agent_state: archived idle agents are dead"
+}
+
+test_paseo_agent_state_treats_running_and_idle_as_alive() {
+  local out
+  paseo_case agent-state-alive
+  paseo_env
+  printf '{"Status":"running","Archived":false}\n' > "$RESP/1.out"
+  out=$(bash -c '. "$0/bin/backends/paseo.sh"; fm_backend_paseo_agent_state agent-running' "$ROOT")
+  [ "$out" = alive ] || fail "running agent should be alive, got '$out'"
+
+  printf '{"Status":"idle","Archived":false}\n' > "$RESP/2.out"
+  out=$(bash -c '. "$0/bin/backends/paseo.sh"; fm_backend_paseo_agent_state agent-idle' "$ROOT")
+  [ "$out" = alive ] || fail "idle agent should be alive, got '$out'"
+  pass "fm_backend_paseo_agent_state: running and idle agents are alive"
+}
+
+test_paseo_agent_state_treats_unfamiliar_status_as_unreadable() {
+  local out
+  paseo_case agent-state-unfamiliar
+  paseo_env
+  printf '{"Status":"paused","Archived":false}\n' > "$RESP/1.out"
+  out=$(bash -c '. "$0/bin/backends/paseo.sh"; fm_backend_paseo_agent_state agent-paused' "$ROOT")
+  [ "$out" = unreadable ] || fail "unfamiliar status should be unreadable (never assumed dead), got '$out'"
+
+  printf '{}\n' > "$RESP/2.out"
+  out=$(bash -c '. "$0/bin/backends/paseo.sh"; fm_backend_paseo_agent_state agent-empty' "$ROOT")
+  [ "$out" = unreadable ] || fail "empty json status should be unreadable, got '$out'"
+  pass "fm_backend_paseo_agent_state: unfamiliar or empty status is unreadable"
+}
+
+test_paseo_agent_state_treats_inspect_failure_as_unreadable() {
+  local out
+  paseo_case agent-state-failure
+  paseo_env
+  printf 'daemon transport error\n' > "$RESP/1.out"
+  echo "1" > "$RESP/1.exit"
+  printf '[]\n' > "$RESP/2.out"
+  out=$(bash -c '. "$0/bin/backends/paseo.sh"; fm_backend_paseo_agent_state agent-error' "$ROOT")
+  [ "$out" = unreadable ] || fail "inspect failure without not-found should be unreadable, got '$out'"
+  pass "fm_backend_paseo_agent_state: CLI failure without not-found is unreadable"
+}
+
+test_paseo_agent_state_treats_authoritative_not_found_as_missing() {
+  local out
+  paseo_case agent-state-not-found
+  paseo_env
+  printf '{"error":{"code":"INSPECT_FAILED","message":"Failed to inspect agent: Agent not found: agent-gone"}}\n' > "$RESP/1.out"
+  echo "1" > "$RESP/1.exit"
+  printf '[]\n' > "$RESP/2.out"
+  out=$(bash -c '. "$0/bin/backends/paseo.sh"; fm_backend_paseo_agent_state agent-gone' "$ROOT")
+  [ "$out" = missing ] || fail "authoritative not-found should be missing, got '$out'"
+  pass "fm_backend_paseo_agent_state: authoritative not-found is missing"
+}
+
+test_paseo_send_key_propagates_failure() {
+  local status
+  paseo_case send-key-failure
+  paseo_env
+  # Agent inspect succeeds so it treats target as native agent
+  printf '{"Status":"running"}\n' > "$RESP/1.out"
+  set +e
+  FM_PASEO_LIFECYCLE_EXIT=1 bash -c '. "$0/bin/backends/paseo.sh"; fm_backend_paseo_send_key agent-fail C-c' "$ROOT"
+  status=$?
+  set -e
+  [ "$status" -ne 0 ] || fail "send_key should propagate failure when paseo stop fails"
+  pass "fm_backend_paseo_send_key: propagates failure when stop fails"
 }
 
 assert_paseo_busy_state() {  # <name> <json> <expected>
@@ -378,6 +443,11 @@ test_paseo_kill_stops_archives_and_verifies_agent
 test_paseo_kill_accepts_already_archived_agent_without_lifecycle_calls
 test_paseo_remove_worktree_archives_and_verifies_workspace
 test_paseo_agent_state_treats_archived_idle_as_dead
+test_paseo_agent_state_treats_running_and_idle_as_alive
+test_paseo_agent_state_treats_unfamiliar_status_as_unreadable
+test_paseo_agent_state_treats_inspect_failure_as_unreadable
+test_paseo_agent_state_treats_authoritative_not_found_as_missing
+test_paseo_send_key_propagates_failure
 test_paseo_busy_state_maps_native_status
 test_paseo_spawn_agent_extracts_id_and_opens_agent
 test_paseo_spawn_agent_routes_dynamic_provider

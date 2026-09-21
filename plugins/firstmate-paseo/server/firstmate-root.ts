@@ -1,7 +1,30 @@
 import { lstatSync, readFileSync, realpathSync, statSync } from "node:fs";
-import { isAbsolute, join } from "node:path";
+import { homedir } from "node:os";
+import { isAbsolute, join, resolve } from "node:path";
 
-export const DEFAULT_FIRSTMATE_ROOT = "/Users/macbookair/coding_projects/firstmate";
+function isRegularFile(root: string, relativePath: string): boolean {
+  try {
+    return lstatSync(join(root, relativePath)).isFile();
+  } catch {
+    return false;
+  }
+}
+
+export function resolveDefaultFirstmateRoot(): string {
+  if (process.env.FM_ROOT?.trim()) return process.env.FM_ROOT.trim();
+  // When colocated inside firstmate/plugins/firstmate-paseo, resolve repo root dynamically:
+  try {
+    const parentRoot = resolve(__dirname, "../..");
+    if (isRegularFile(parentRoot, "AGENTS.md") && isRegularFile(parentRoot, "bin/fm-session-start.sh")) {
+      return parentRoot;
+    }
+  } catch {
+    return join(homedir(), "coding_projects/firstmate");
+  }
+  return join(homedir(), "coding_projects/firstmate");
+}
+
+export const DEFAULT_FIRSTMATE_ROOT = resolveDefaultFirstmateRoot();
 
 const REQUIRED_FIRSTMATE_FILES = ["AGENTS.md", "bin/fm-session-start.sh"] as const;
 
@@ -22,21 +45,13 @@ function hasValidGitMetadata(root: string): boolean {
   }
 }
 
-function isRegularFile(root: string, relativePath: string): boolean {
-  try {
-    return lstatSync(join(root, relativePath)).isFile();
-  } catch {
-    return false;
-  }
-}
-
 /**
  * Resolve a caller-supplied root only when it is an actual Firstmate checkout.
  * The marker files are intentionally checked after realpath resolution so an
  * arbitrary directory cannot be used to select scripts for the fleet RPC.
  */
 export function sanitizeFirstmateRoot(candidate?: string): string | null {
-  const raw = (candidate?.trim() || process.env.FM_ROOT?.trim() || DEFAULT_FIRSTMATE_ROOT).replace(
+  const raw = (candidate?.trim() || process.env.FM_ROOT?.trim() || resolveDefaultFirstmateRoot()).replace(
     /[\\/]+$/,
     "",
   );

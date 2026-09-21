@@ -192,17 +192,10 @@ if (expectedWorkspace && expectedWorkspace.trim() !== "") {
 ' "$task_id" "$recorded_worktree" "${expected_workspace:-}"
 }
 
-# Target exists in Paseo
-fm_backend_paseo_target_exists() {  # <target> [expected-label]
-  local target=$1
+# Target terminal exists in Paseo
+fm_backend_paseo_terminal_exists() {  # <target>
+  local target=$1 terms
   [ -n "$target" ] || return 1
-  fm_backend_paseo_tool_check || return 1
-
-  if fm_backend_paseo_is_agent "$target"; then
-    return 0
-  fi
-
-  local terms
   terms=$(paseo terminal ls --json 2>/dev/null) || return 1
   printf '%s' "$terms" | node -e '
 const fs = require("fs");
@@ -217,26 +210,40 @@ process.exit(1);
 ' "$target"
 }
 
+# Target exists in Paseo (either agent or terminal)
+fm_backend_paseo_target_exists() {  # <target> [expected-label]
+  local target=$1
+  [ -n "$target" ] || return 1
+  fm_backend_paseo_tool_check || return 1
+
+  if fm_backend_paseo_is_agent "$target"; then
+    return 0
+  fi
+
+  fm_backend_paseo_terminal_exists "$target"
+}
+
 # Recovery-grade agent state: alive, dead, missing, unreadable
 fm_backend_paseo_agent_state() {  # <target>
-  local target=$1 out status
+  local target=$1 out status rc=0
   [ -n "$target" ] || { printf 'missing'; return 0; }
   fm_backend_paseo_tool_check || { printf 'unreadable'; return 0; }
 
-  if fm_backend_paseo_is_agent "$target"; then
-    out=$(paseo inspect "$target" --json 2>/dev/null) || { printf 'missing'; return 0; }
+  out=$(paseo inspect "$target" --json 2>&1) || rc=$?
+  if [ "$rc" -eq 0 ]; then
     status=$(printf '%s' "$out" | node -e '
 const fs = require("fs");
 try {
   const data = JSON.parse(fs.readFileSync(0, "utf8"));
-  const status = data.Status ?? data.status;
-  const archived = data.Archived === true || data.archived === true;
-  if (archived || status === "closed") {
+  const rawStatus = String(data.Status ?? data.status ?? data.agent?.Status ?? data.agent?.status ?? "").toLowerCase();
+  const archived = data.Archived === true || data.archived === true || data.agent?.Archived === true;
+  if (archived === true || rawStatus === "closed" || rawStatus === "archived") {
     process.stdout.write("dead");
-  } else if (status === "running" || status === "idle") {
+  } else if (rawStatus === "running" || rawStatus === "idle") {
     process.stdout.write("alive");
   } else {
-    process.stdout.write("dead");
+    // Malformed, unfamiliar, or empty status -> unreadable! Never assume dead!
+    process.stdout.write("unreadable");
   }
 } catch (e) {
   process.stdout.write("unreadable");
@@ -246,11 +253,25 @@ try {
     return 0
   fi
 
-  if fm_backend_paseo_target_exists "$target"; then
+  # Inspect failed; check if target is an existing terminal
+  if fm_backend_paseo_terminal_exists "$target"; then
     printf 'alive'
-  else
-    printf 'missing'
+    return 0
   fi
+
+  # Check if failure was an authoritative "not found" from Paseo
+  status=$(printf '%s' "$out" | node -e '
+const fs = require("fs");
+try {
+  const d = JSON.parse(fs.readFileSync(0, "utf8"));
+  if (d.error && (d.error.code === "INSPECT_FAILED" || String(d.error.message || "").toLowerCase().includes("not found"))) {
+    process.stdout.write("missing");
+    process.exit(0);
+  }
+} catch (e) {}
+process.stdout.write("unreadable");
+')
+  printf '%s' "${status:-unreadable}"
 }
 
 # Semantic native agent state: busy, idle, dead, unknown
@@ -369,7 +390,7 @@ fm_backend_paseo_send_text_submit() {  # <target> <text> <retries> <enter-sleep>
   paseo terminal send-keys "$target" "$text" Enter >/dev/null 2>&1
 }
 
-# Send key (C-c, Escape, Enter)
+# Send key (C-c, Escape, Enter, C-u)
 fm_backend_paseo_send_key() {  # <target> <key> [expected-label]
   local target=$1 key=$2
   [ -n "$target" ] || return 1
@@ -378,18 +399,30 @@ fm_backend_paseo_send_key() {  # <target> <key> [expected-label]
   if fm_backend_paseo_is_agent "$target"; then
     case "$key" in
       C-c|Escape|interrupt)
-        paseo stop "$target" >/dev/null 2>&1 || true
+        paseo stop "$target" >/dev/null 2>&1 || return 1
+        return 0
+        ;;
+      Enter|C-u)
+        return 0
+        ;;
+      *)
+        echo "error: unsupported key '$key' for Paseo native agent $target" >&2
+        return 1
         ;;
     esac
-    return 0
   fi
 
   case "$key" in
-    C-c) paseo terminal send-keys "$target" "^C" >/dev/null 2>&1 || true ;;
-    Enter) paseo terminal send-keys "$target" Enter >/dev/null 2>&1 || true ;;
-    Escape) paseo terminal send-keys "$target" Escape >/dev/null 2>&1 || true ;;
-    C-u) paseo terminal send-keys "$target" "^U" >/dev/null 2>&1 || true ;;
+    C-c) paseo terminal send-keys "$target" "^C" >/dev/null 2>&1 || return 1 ;;
+    Enter) paseo terminal send-keys "$target" Enter >/dev/null 2>&1 || return 1 ;;
+    Escape) paseo terminal send-keys "$target" Escape >/dev/null 2>&1 || return 1 ;;
+    C-u) paseo terminal send-keys "$target" "^U" >/dev/null 2>&1 || return 1 ;;
+    *)
+      echo "error: unsupported key '$key' for Paseo terminal $target" >&2
+      return 1
+      ;;
   esac
+  return 0
 }
 
 # Kill / cleanup the task
