@@ -1,5 +1,4 @@
 import { lstatSync, readFileSync, realpathSync, statSync } from "node:fs";
-import { homedir } from "node:os";
 import { isAbsolute, join, resolve } from "node:path";
 
 function isRegularFile(root: string, relativePath: string): boolean {
@@ -10,21 +9,7 @@ function isRegularFile(root: string, relativePath: string): boolean {
   }
 }
 
-export function resolveDefaultFirstmateRoot(): string {
-  if (process.env.FM_ROOT?.trim()) return process.env.FM_ROOT.trim();
-  // When colocated inside firstmate/plugins/firstmate-paseo, resolve repo root dynamically:
-  try {
-    const parentRoot = resolve(__dirname, "../..");
-    if (isRegularFile(parentRoot, "AGENTS.md") && isRegularFile(parentRoot, "bin/fm-session-start.sh")) {
-      return parentRoot;
-    }
-  } catch {
-    return join(homedir(), "coding_projects/firstmate");
-  }
-  return join(homedir(), "coding_projects/firstmate");
-}
-
-export const DEFAULT_FIRSTMATE_ROOT = resolveDefaultFirstmateRoot();
+export const DEFAULT_FIRSTMATE_ROOT = process.env.FM_ROOT?.trim() || "";
 
 const REQUIRED_FIRSTMATE_FILES = ["AGENTS.md", "bin/fm-session-start.sh"] as const;
 
@@ -45,16 +30,32 @@ function hasValidGitMetadata(root: string): boolean {
   }
 }
 
+function resolveCandidateRoot(candidate?: string): string {
+  if (candidate?.trim()) return candidate.trim();
+  if (process.env.FM_ROOT?.trim()) return process.env.FM_ROOT.trim();
+  const cwd = process.cwd();
+  if (REQUIRED_FIRSTMATE_FILES.every((file) => isRegularFile(cwd, file)) && hasValidGitMetadata(cwd)) {
+    return cwd;
+  }
+  // When running inside plugins/firstmate-paseo, check enclosing parent repo
+  try {
+    const parent = resolve(__dirname, "../..");
+    if (REQUIRED_FIRSTMATE_FILES.every((file) => isRegularFile(parent, file)) && hasValidGitMetadata(parent)) {
+      return parent;
+    }
+  } catch {
+    return "";
+  }
+  return "";
+}
+
 /**
  * Resolve a caller-supplied root only when it is an actual Firstmate checkout.
  * The marker files are intentionally checked after realpath resolution so an
  * arbitrary directory cannot be used to select scripts for the fleet RPC.
  */
 export function sanitizeFirstmateRoot(candidate?: string): string | null {
-  const raw = (candidate?.trim() || process.env.FM_ROOT?.trim() || resolveDefaultFirstmateRoot()).replace(
-    /[\\/]+$/,
-    "",
-  );
+  const raw = resolveCandidateRoot(candidate).replace(/[\\/]+$/, "");
 
   if (!raw || raw.includes("\0") || !isAbsolute(raw)) {
     return null;

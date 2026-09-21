@@ -196,13 +196,14 @@ if (expectedWorkspace && expectedWorkspace.trim() !== "") {
 fm_backend_paseo_terminal_exists() {  # <target>
   local target=$1 terms
   [ -n "$target" ] || return 1
-  terms=$(paseo terminal ls --json 2>/dev/null) || return 1
+  terms=$(paseo terminal ls --json 2>/dev/null) || return 2
   printf '%s' "$terms" | node -e '
 const fs = require("fs");
 const target = process.argv[1];
 try {
-  const list = JSON.parse(fs.readFileSync(0, "utf8"));
-  if (Array.isArray(list) && list.some(t => t.id === target || t.name === target)) {
+  const data = JSON.parse(fs.readFileSync(0, "utf8"));
+  const list = Array.isArray(data) ? data : (data.terminals || data.Terminals || data.result?.terminals || []);
+  if (list.some(t => t && (t.id === target || t.name === target || t.Id === target || t.Name === target))) {
     process.exit(0);
   }
 } catch (e) {}
@@ -254,8 +255,15 @@ try {
   fi
 
   # Inspect failed; check if target is an existing terminal
-  if fm_backend_paseo_terminal_exists "$target"; then
+  local term_rc=0
+  fm_backend_paseo_terminal_exists "$target" || term_rc=$?
+  if [ "$term_rc" -eq 0 ]; then
     printf 'alive'
+    return 0
+  fi
+  if [ "$term_rc" -eq 2 ]; then
+    # Terminal listing failed/unreachable - cannot prove terminal absence!
+    printf 'unreadable'
     return 0
   fi
 
@@ -264,11 +272,17 @@ try {
 const fs = require("fs");
 try {
   const d = JSON.parse(fs.readFileSync(0, "utf8"));
-  if (d.error && (d.error.code === "INSPECT_FAILED" || String(d.error.message || "").toLowerCase().includes("not found"))) {
-    process.stdout.write("missing");
-    process.exit(0);
+  if (d.error) {
+    const code = String(d.error.code || "").toUpperCase();
+    const msg = String(d.error.message || "").toLowerCase();
+    // Authoritative miss only on specific agent-not-found code or explicit "agent not found:" message
+    if (code === "AGENT_NOT_FOUND" || msg.includes("agent not found:") || msg.startsWith("failed to inspect agent: agent not found")) {
+      process.stdout.write("missing");
+      process.exit(0);
+    }
   }
 } catch (e) {}
+// Timeouts, ambiguous IDs, or transport errors stay unreadable
 process.stdout.write("unreadable");
 ')
   printf '%s' "${status:-unreadable}"

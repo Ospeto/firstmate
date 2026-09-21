@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { homedir } from "node:os";
+import { join, resolve } from "node:path";
 import type { AgentPermissionRequest } from "@getpaseo/protocol/agent-types";
 import { sanitizeFirstmateRoot } from "./firstmate-root";
 
@@ -200,6 +201,17 @@ export function clearJevCaches(): void {
 export function resolveApiKey(firstmateRoot?: string): string | null {
   if (process.env.TYPESAFE_API_KEY) {
     return process.env.TYPESAFE_API_KEY.trim();
+  }
+
+  // Check native Pi secret store:
+  const secretPath = join(homedir(), ".pi/agent/secrets/typesafe_api_key");
+  if (existsSync(secretPath)) {
+    try {
+      const key = readFileSync(secretPath, "utf8").trim();
+      if (key) return key;
+    } catch {
+      // Ignore read errors
+    }
   }
 
   const root = sanitizeFirstmateRoot(firstmateRoot);
@@ -657,16 +669,16 @@ export async function routeModelForPrompt(
       const choice = json?.answers?.dispatch?.choice;
       if (choice === "security_architecture") {
         return {
-          model: "cockpit/gpt-5.6-luna",
+          model: "xai/grok-4.7",
           thinkingOptionId: "max",
-          reason: "Security / core architecture matched -> GPT-5.6 Luna (max effort)",
+          reason: "Security / core architecture matched -> Grok 4.7 (max effort)",
         };
       }
       if (choice === "unsticking_recovery") {
         return {
-          model: "cockpit/gpt-5.6-sol",
+          model: "xai/grok-4.7",
           thinkingOptionId: "high",
-          reason: "Intractable error / unsticking matched -> GPT-5.6 Sol (high effort)",
+          reason: "Intractable error / unsticking matched -> Grok 4.7 (high effort)",
         };
       }
       if (choice === "burmese_voiceover") {

@@ -456,19 +456,19 @@ describe("Jev Permission Arbiter", () => {
   });
 
   describe("routeModelForPrompt", () => {
-    it("routes security and auth prompts to GPT-5.6 Luna with max effort", async () => {
+    it("routes security and auth prompts to Grok 4.7 with max effort", async () => {
       const res = await routeModelForPrompt(
         "Audit JWT token handling, session tokens, and backend security in auth-service",
       );
-      assert.strictEqual(res.model, "cockpit/gpt-5.6-luna");
+      assert.strictEqual(res.model, "xai/grok-4.7");
       assert.strictEqual(res.thinkingOptionId, "max");
     });
 
-    it("routes unsticking and recovery prompts to GPT-5.6 Sol with high effort", async () => {
+    it("routes unsticking and recovery prompts to Grok 4.7 with high effort", async () => {
       const res = await routeModelForPrompt(
         "Recovering a stuck worker, agent is looping on the same failing error and stalled after 5 attempts",
       );
-      assert.strictEqual(res.model, "cockpit/gpt-5.6-sol");
+      assert.strictEqual(res.model, "xai/grok-4.7");
       assert.strictEqual(res.thinkingOptionId, "high");
     });
 
