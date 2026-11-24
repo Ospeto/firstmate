@@ -1,0 +1,20 @@
+NOTE: the two 'stale budget' blocks showing turnend-blocks_after=present are artifacts of
+inheriting NO_MISTAKES_GATE into the lab primary, which made fm-sessionstart-run.sh
+stand down (digest empty). The final block runs with env -u NO_MISTAKES_GATE and shows
+the real behavior: stale budget cleared, first Stop of the new session nags.
+
+== empty fleet ==
+out={} elapsed_ms=1738 turnend-blocks=absent park-owner=absent
+== in-flight task, no watcher, no park ==
+block=1 decision=continue elapsed_ms=854 budget=1 park-owner=absent nag_hits=1
+block=2 decision=continue elapsed_ms=572 budget=2 park-owner=absent nag_hits=1
+block=3 decision=continue elapsed_ms=523 budget=3 park-owner=absent nag_hits=1
+block=4 decision=none elapsed_ms=493 budget=3 park-owner=absent nag_hits=0
+== stale budget carried into a fresh session (last fix) ==
+sessionstart_out_head={} turnend-blocks_after=present
+first_stop_of_new_session decision=none nag_hits=0
+== realistic lab home ==
+sessionstart_out_len=2 turnend-blocks_after=present
+first_stop_of_new_session decision=none nag_hits=0 budget=3
+sessionstart_out_len=14862 turnend-blocks_after=absent
+first_stop_of_new_session decision=continue nag_hits=1 budget=1

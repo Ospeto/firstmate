@@ -1,0 +1,2 @@
+not ok - SessionStart hook did not create state/.lock in live agy run
+EXIT:1

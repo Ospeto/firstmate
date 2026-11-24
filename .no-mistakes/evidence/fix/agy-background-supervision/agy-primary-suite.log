@@ -1,0 +1,17 @@
+1..11
+ok - .agents/hooks.json: valid JSON and hook commands resolve from both .agents/ and repo root
+warning: re-init: ignored --initial-branch=main
+ok - fm-sessionstart-agy: runs in primary and seeded secondmate homes, stands down in worktree, and detects agy across 10+ hops
+ok - fm-sessionstart-agy: a fresh session clears an exhausted state/.turnend-blocks and regains its 3-block nag budget
+ok - fm-turnend-guard-agy: returns {} immediately when fleet is empty or watcher is healthy
+ok - fm-turnend-guard --agy & fm-turnend-guard-agy: bounded repair nag blocks 3 times then fails open with {}
+ok - fm-turnend-guard-agy: non-normal terminationReason values pass through with {}
+warning: re-init: ignored --initial-branch=main
+ok - fm-turnend-guard-agy: stands down for foreign lock owner and linked crewmate worktree
+ok - fm-arm-pretool-check --agy: denies through the shared policy and allows ordinary commands
+warning: re-init: ignored --initial-branch=main
+ok - fm-cd-pretool-check --agy: denies persistent cd in primary, allows subshell cd, inert in worktree
+warning: re-init: ignored --initial-branch=main
+ok - fm-subagent-pretool-check --agy: denies invoke_subagent, allows observe-only tools, inert in worktree
+ok - session-lock & supervision model: agy ancestry, persistent model, and supervision instructions verified
+FM_TEST_COMPLETE

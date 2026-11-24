@@ -1,0 +1,15 @@
+Live agy CLI end-to-end attempt (tests/fm-agy-primary-live-e2e.test.sh, FM_AGY_PRIMARY_LIVE=1)
+Result: fail at SessionStart step -- no state/.lock created.
+
+Cause: the guard runs agy under an isolated HOME ($LAB/user-home) populated from
+$HOME/.gemini/antigravity-cli/{antigravity-oauth-token,installation_id,jetski_state.pbtxt,settings.json}.
+None of those files carries the agy login; manual replays likewise printed:
+  "Authentication required... Waiting for authentication (timeout 60s)... Error: authentication timed out."
+Adding copies of ~/.gemini/jetski-standalone-oauth-token, ~/.gemini/config/,
+~/.gemini/state.json, ~/.gemini/trustedFolders.json and
+~/.gemini/antigravity/antigravity_state.pbtxt to the isolated HOME produced the
+same authentication prompt, so the credential is not reproducible by file copy
+(macOS keychain / machine-bound). Using the real HOME would require signing in
+(firstmate forbids it) or trusting the disposable workspace in the user-level
+agy settings store (forbidden user-config mutation), so this scenario is
+reported untested.
